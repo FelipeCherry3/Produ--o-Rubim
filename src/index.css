@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222.2 84% 4.9%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222.2 84% 4.9%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 84% 4.9%;
+  --radius: 0.5rem;
+}
+
+body {
+  @apply bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.kanban-column {
+  @apply bg-white/80 backdrop-blur-sm border border-white/20 rounded-xl shadow-lg;
+}
+
+.task-card {
+  @apply bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing;
+}
+
+.task-card:hover {
+  @apply transform -translate-y-1 shadow-lg;
+}
+
+.sector-header {
+  @apply text-white font-bold text-center py-3 rounded-t-xl;
+}
+
+.usinagem { @apply bg-gradient-to-r from-orange-500 to-orange-600; }
+.marcenaria { @apply bg-gradient-to-r from-yellow-500 to-yellow-600; }
+.montagem { @apply bg-gradient-to-r from-blue-500 to-blue-600; }
+.tapeçaria { @apply bg-gradient-to-r from-pink-500 to-pink-600; }
+.lustracao { @apply bg-gradient-to-r from-green-500 to-green-600; }
+.expedicao { @apply bg-gradient-to-r from-purple-500 to-purple-600; }
+
+.priority-high { @apply border-l-4 border-red-500; }
+.priority-medium { @apply border-l-4 border-yellow-500; }
+.priority-low { @apply border-l-4 border-green-500; }
+
+.floating-add-btn {
+  @apply fixed bottom-8 right-8 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-200 z-50;
+}
