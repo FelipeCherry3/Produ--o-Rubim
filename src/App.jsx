@@ -59,11 +59,10 @@ function App() {
   };
 
   // === CSRF ===
-  // Compatível com CookieCsrfTokenRepository: backend expõe /api/csrf → { headerName, parameterName, token }
   const fetchCsrfToken = async () => {
     try {
       const { data } = await api.get('/api/csrf');
-      // Normalmente headerName = "X-XSRF-TOKEN"
+      //  headerName = "X-XSRF-TOKEN"
       const headerName = data?.headerName || 'X-XSRF-TOKEN';
       api.defaults.headers.common[headerName] = data?.token;
       setCsrfToken(data?.token);
@@ -98,15 +97,23 @@ function App() {
         orderNumber: String(pedido.numero ?? ''),
         client: pedido.cliente?.nome || 'Cliente Desconhecido',
         description: (pedido.itens || []).map((i) => i?.descricao).filter(Boolean).join(', '),
+        dataInicial: pedido.dataEmissao || new Date().toISOString(),
+        dataFinal: pedido.dataPrevista || new Date().toISOString(),
+        dataEntrega: pedido.dataEntrega || '',
         products: (pedido.itens || []).map((item) => ({
           name: item.descricao || 'Sem descrição',
           madeira: item.corMadeira || '',
           revestimento: item.corRevestimento || '',
           tamanho: item.detalhesMedidas || '',
           detalhes: item.descricaoDetalhada || '',
+          quantity: item.quantidade || 1,
+          unidade: item.unidade || 'un',
+          // outras propriedades do item, se necessário
+
         })),
         sector: mapSectorFromId(pedido.setor?.id),
         priority: 'normal',
+        createdAt: pedido.dataCriacao || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }));
 
