@@ -2,6 +2,9 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { List } from 'lucide-react';
 
+//Sumario de Produção ( Total de Pedidos e Produtos por Setor)
+//Futuramente incluir gráficos e estatísticas
+//Incluir exportação em formato CSV  e Botão para Imprimir
 const ProductionSummary = ({ tasks, sector }) => {
   const summary = useMemo(() => {
     const productMap = new Map();
