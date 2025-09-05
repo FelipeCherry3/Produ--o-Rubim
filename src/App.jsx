@@ -97,15 +97,19 @@ function App() {
         orderNumber: String(pedido.numero ?? ''),
         client: pedido.cliente?.nome || 'Cliente Desconhecido',
         description: (pedido.itens || []).map((i) => i?.descricao).filter(Boolean).join(', '),
-        dataInicial: pedido.dataEmissao || new Date().toISOString(),
+        dataEmissao: pedido.dataEmissao || new Date().toISOString(),
         dataFinal: pedido.dataPrevista || new Date().toISOString(),
+        dueDate: pedido.dataPrevista || new Date().toISOString(),
+        estimatedHours: pedido.horasEstimadas || 1,
+        orderValue: pedido.valorTotal || 0,
+        orderStatus: pedido.status || 'PENDENTE',
         dataEntrega: pedido.dataEntrega || '',
         products: (pedido.itens || []).map((item) => ({
           name: item.descricao || 'Sem descrição',
           madeira: item.corMadeira || '',
           revestimento: item.corRevestimento || '',
           tamanho: item.detalhesMedidas || '',
-          detalhes: item.descricaoDetalhada || '',
+          details: item.descricaoDetalhada || '',
           quantity: item.quantidade || 1,
           unidade: item.unidade || 'un',
           // outras propriedades do item, se necessário
@@ -281,7 +285,7 @@ function App() {
                   onClick={() =>
                     toast({
                       title: '🚧 Filtros não implementados ainda',
-                      description: 'Mas não se preocupe! Você pode solicitar isso no seu próximo prompt! 🚀',
+                      description: 'Logo sai',
                     })
                   }
                 >
@@ -293,7 +297,7 @@ function App() {
                   onClick={() =>
                     toast({
                       title: '🚧 Relatórios não implementados ainda',
-                      description: 'Mas não se preocupe! Você pode solicitar isso no seu próximo prompt! 🚀',
+                      description: 'Logo sai',
                     })
                   }
                 >

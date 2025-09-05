@@ -56,6 +56,7 @@ const TaskCard = ({ task, onDragStart, onDragEnd, onClick }) => {
         <div className="flex items-center justify-between text-xs text-gray-500">
           <div className="flex items-center">
             <Calendar className="w-3 h-3 mr-1" />
+            {/*  Data vem assim ->  2025-03-03 */}
             <span>{new Date(task.dueDate).toLocaleDateString('pt-BR')}</span>
           </div>
           
