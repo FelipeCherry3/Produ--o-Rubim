@@ -9,11 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
-import axios from 'axios';
 import api from './api/axios';
 
-// === AXIOS CONFIG ===
-// Use proxy no Vite (vite.config.ts) para /login e /api apontarem para http://localhost:8080
+// ▶️ NOVO: Dialog (shadcn/ui)
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 function App() {
   const [tasks, setTasks] = useState([]);
@@ -25,11 +31,13 @@ function App() {
   const [csrfToken, setCsrfToken] = useState(null);
   const { toast } = useToast();
 
+  // ▶️ NOVO: estado para confirmação de movimento
+  const [confirmMove, setConfirmMove] = useState({ open: false, task: null, newSector: null });
+  const [isMoving, setIsMoving] = useState(false);
+
   const sectorMap = {
     usinagem:   { id: 1, name: 'Usinagem' },
-    marcenaria: { id: 2, name: 'Marcenaria' },
     montagem:   { id: 3, name: 'Montagem' },
-    tapeçaria:  { id: 4, name: 'Tapeçaria' },
     lustracao:  { id: 5, name: 'Lustração' },
     expedicao:  { id: 6, name: 'Expedição' },
   };
@@ -62,7 +70,6 @@ function App() {
   const fetchCsrfToken = async () => {
     try {
       const { data } = await api.get('/api/csrf');
-      //  headerName = "X-XSRF-TOKEN"
       const headerName = data?.headerName || 'X-XSRF-TOKEN';
       api.defaults.headers.common[headerName] = data?.token;
       setCsrfToken(data?.token);
@@ -99,24 +106,21 @@ function App() {
         description: (pedido.itens || []).map((i) => i?.descricao).filter(Boolean).join(', '),
         dataEmissao: pedido.dataEmissao || new Date().toISOString(),
         dataFinal: pedido.dataPrevista || new Date().toISOString(),
-        dueDate: pedido.dataPrevista || new Date().toISOString(),
+        dueDate: pedido.dataEntrega || '',
         estimatedHours: pedido.horasEstimadas || 1,
         orderValue: pedido.valorTotal || 0,
         orderStatus: pedido.status || 'PENDENTE',
         dataEntrega: pedido.dataEntrega || '',
         products: (pedido.itens || []).map((item) => ({
+          id: item.id,                               // 👉 ESSENCIAL para o patch no back
           name: item.descricao || 'Sem descrição',
-          madeira: item.corMadeira || '',
-          revestimento: item.corRevestimento || '',
-          tamanho: item.detalhesMedidas || '',
+          quantity: item.quantidade ?? 1,
+          woodColor: item.corMadeira || '',
+          coatingColor: item.corRevestimento || '',
           details: item.descricaoDetalhada || '',
-          quantity: item.quantidade || 1,
-          unidade: item.unidade || 'un',
-          // outras propriedades do item, se necessário
-
         })),
         sector: mapSectorFromId(pedido.setor?.id),
-        priority: 'normal',
+        priority: pedido.priority || 'normal',
         createdAt: pedido.dataCriacao || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }));
@@ -189,50 +193,55 @@ function App() {
   const handleDragEnd = () => setDraggedTask(null);
   const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
 
-  const handleDrop = async (e, newSector) => {
+  // ⤵️ ALTERADO: não move mais de forma otimista; abre modal de confirmação
+  const handleDrop = (e, newSector) => {
     e.preventDefault();
     if (!draggedTask || draggedTask.sector === newSector) {
       setDraggedTask(null);
       return;
     }
+    setConfirmMove({ open: true, task: draggedTask, newSector });
+    setDraggedTask(null);
+  };
 
-    const oldSector = draggedTask.sector;
-    // otimista
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === draggedTask.id
-          ? { ...task, sector: newSector, updatedAt: new Date().toISOString() }
-          : task
-      )
-    );
+  // ▶️ NOVO: confirmar movimento
+  const confirmMoveAction = async () => {
+    const task = confirmMove.task;
+    const newSector = confirmMove.newSector;
+    if (!task || !newSector) return;
 
+    const oldSector = task.sector;
+    setIsMoving(true);
     try {
       await api.put('/api/pedidos-venda/atualizarSetor', {
-        idPedido: draggedTask.id,
+        idPedido: task.id,
         idNovoSetor: sectorMap[newSector].id,
       });
+
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, sector: newSector, updatedAt: new Date().toISOString() } : t))
+      );
+
       toast({
         title: '📋 Pedido movido!',
-        description: `Pedido "${draggedTask.orderNumber}" → ${sectorMap[newSector].name}.`,
+        description: `Pedido "${task.orderNumber}" → ${sectorMap[newSector].name}.`,
       });
     } catch (error) {
-      // rollback
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === draggedTask.id
-            ? { ...task, sector: oldSector, updatedAt: new Date().toISOString() }
-            : task
-        )
-      );
       toast({
         title: '❌ Erro ao mover pedido',
-        description: 'Não foi possível atualizar o setor no servidor.',
+        description: error?.response?.data?.message || 'Não foi possível atualizar o setor no servidor.',
         variant: 'destructive',
       });
       console.error('Erro atualizar setor:', error?.response?.data || error?.message);
     } finally {
-      setDraggedTask(null);
+      setIsMoving(false);
+      setConfirmMove({ open: false, task: null, newSector: null });
     }
+  };
+
+  // ▶️ NOVO: cancelar movimento
+  const cancelMoveAction = () => {
+    setConfirmMove({ open: false, task: null, newSector: null });
   };
 
   const filteredTasks = tasks.filter((task) =>
@@ -252,6 +261,9 @@ function App() {
 
   const stats = getStats();
 
+  // helper para nome do setor
+  const sectorLabel = (key) => sectorMap[key]?.name || key;
+
   return (
     <>
       <Helmet>
@@ -267,8 +279,8 @@ function App() {
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">🏭 Sistema de Produção</h1>
-                <p className="text-gray-600">Gerenciamento completo da produção de móveis</p>
+                <h1 className="text-4xl font-bold text-gray-900 mb-2">🏭 Produção Rubim</h1>
+                <p className="text-gray-600">Gerenciamento de Produção Rubim Mesas e Cadeiras</p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
@@ -362,6 +374,42 @@ function App() {
         </div>
         <Toaster />
       </div>
+
+      {/* ▶️ NOVO: Modal de Confirmação de Apontamento */}
+      <Dialog open={confirmMove.open} onOpenChange={(open) => !isMoving && setConfirmMove((prev) => ({ ...prev, open }))}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar apontamento</DialogTitle>
+            <DialogDescription>
+              {confirmMove.task && (
+                <span>
+                  Confirmar apontamento do Pedido Nº <b>{confirmMove.task.orderNumber}</b> do setor{' '}
+                  <b>{sectorLabel(confirmMove.task.sector)}</b> para o setor{' '}
+                  <b>{sectorLabel(confirmMove.newSector)}</b>?
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Informações adicionais do pedido */}
+          {confirmMove.task && (
+            <div className="mt-4 space-y-2 text-sm text-gray-700">
+              <div><b>Cliente:</b> {confirmMove.task.client}</div>
+              <div><b>Descrição:</b> {confirmMove.task.description || '—'}</div>
+              <div className="text-xs text-gray-500">Última atualização: {new Date(confirmMove.task.updatedAt || Date.now()).toLocaleString()}</div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-6 gap-2 sm:gap-0">
+            <Button variant="outline" onClick={cancelMoveAction} disabled={isMoving}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmMoveAction} disabled={isMoving}>
+              {isMoving ? 'Movendo…' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

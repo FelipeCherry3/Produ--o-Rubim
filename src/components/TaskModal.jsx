@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, User, Package, Hash, Trash2 } from 'lucide-react';
+import { Calendar, Clock, User, Package, Hash, Pencil, Check, X } from 'lucide-react';
+import api from '@/api/axios'; // ajuste se o caminho for diferente
 
 const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
   const initialFormData = {
@@ -25,16 +26,9 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
     products: []
   };
 
-  const initialProductData = {
-    name: '',
-    quantity: 1,
-    woodColor: '',
-    coatingColor: '',
-    details: ''
-  };
-
   const [formData, setFormData] = useState(initialFormData);
-  const [productData, setProductData] = useState(initialProductData);
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [editingSnapshot, setEditingSnapshot] = useState(null); // cópia do item quando entra na edição
 
   useEffect(() => {
     if (task && isEditing) {
@@ -46,11 +40,13 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
     } else {
       setFormData(initialFormData);
     }
+    setEditingProductId(null);
+    setEditingSnapshot(null);
   }, [task, isEditing, isOpen]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const taskData = {
       ...formData,
       id: isEditing ? task.id : Date.now().toString(),
@@ -59,24 +55,67 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
       estimatedHours: parseInt(formData.estimatedHours) || 0
     };
 
-    onSave(taskData);
-    onClose();
-  };
+    // DTO para o backend (patch). Envia dataEntrega e itens (id + campos editáveis)
+    const dto = {
+      id: isEditing ? task.id : null,
+      priority: formData.priority || null,
+      dataEntrega: formData.dueDate || null,
+      itens: (formData.products || []).map(p => ({
+        id: p.id ?? null, // o service só atualiza se existir
+        descricao: p.name ?? null,
+        quantidade: p.quantity ?? null,
+        corMadeira: p.woodColor ?? null,
+        corRevestimento: p.coatingColor ?? null,
+        descricaoDetalhada: p.details ?? null
+      }))
+    };
 
-  const addProduct = () => {
-    if (productData.name.trim() && productData.quantity > 0) {
-      setFormData(prev => ({
-        ...prev,
-        products: [...prev.products, { ...productData, id: Date.now() }]
-      }));
-      setProductData(initialProductData);
+    try {
+      if (dto.id) {
+        await api.put('/api/pedidos-venda/atualizarDados', dto, {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      onSave?.(taskData);
+      onClose();
+    } catch (err) {
+      console.error('Erro ao atualizar pedido:', err);
+      // opcional: toast de erro aqui
     }
   };
 
-  const removeProduct = (productId) => {
+  const startEditProduct = (product) => {
+    setEditingProductId(product.id);
+    // snapshot para permitir cancelar
+    setEditingSnapshot({ ...product });
+  };
+
+  const cancelEditProduct = () => {
+    if (editingSnapshot && editingProductId) {
+      // restaura o item no estado
+      setFormData(prev => ({
+        ...prev,
+        products: prev.products.map(p => (p.id === editingProductId ? editingSnapshot : p))
+      }));
+    }
+    setEditingProductId(null);
+    setEditingSnapshot(null);
+  };
+
+  const confirmEditProduct = () => {
+    // nada especial a fazer além de sair do modo edição,
+    // pois os inputs já atualizaram o estado do produto
+    setEditingProductId(null);
+    setEditingSnapshot(null);
+  };
+
+  // handlers de campos do item quando em edição inline
+  const handleInlineChange = (productId, field, value) => {
     setFormData(prev => ({
       ...prev,
-      products: prev.products.filter(p => p.id !== productId)
+      products: prev.products.map(p =>
+        p.id === productId ? { ...p, [field]: value } : p
+      )
     }));
   };
 
@@ -187,35 +226,117 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
               <Package className="w-5 h-5" />
               Produtos
             </h3>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border-b pb-4">
-              <Input value={productData.name} onChange={e => setProductData(p => ({...p, name: e.target.value}))} placeholder="Nome do Produto" />
-              <Input type="number" value={productData.quantity} onChange={e => setProductData(p => ({...p, quantity: parseInt(e.target.value) || 1}))} placeholder="Quantidade" min="1" />
-              <Input value={productData.woodColor} onChange={e => setProductData(p => ({...p, woodColor: e.target.value}))} placeholder="Cor da Madeira" />
-              <Input value={productData.coatingColor} onChange={e => setProductData(p => ({...p, coatingColor: e.target.value}))} placeholder="Cor do Revestimento" />
-              <Textarea className="lg:col-span-2" value={productData.details} onChange={e => setProductData(p => ({...p, details: e.target.value}))} placeholder="Detalhes específicos do produto..." rows={2} />
-              <div className="lg:col-span-2 flex justify-end">
-                <Button type="button" onClick={addProduct} variant="outline">Adicionar Produto</Button>
-              </div>
-            </div>
 
+            {/* Lista de produtos com edição inline; sem campos de adicionar/remover */}
             <div className="space-y-2">
-              {formData.products.map((product) => (
-                <div key={product.id} className="flex items-start justify-between gap-4 rounded-md border p-3 bg-gray-50/50">
-                  <div>
-                    <p className="font-semibold">{product.quantity}x {product.name}</p>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 mt-1">
-                      <span><Badge variant="secondary">Madeira: {product.woodColor || 'N/A'}</Badge></span>
-                      <span><Badge variant="secondary">Revest.: {product.coatingColor || 'N/A'}</Badge></span>
+              {formData.products.map((product) => {
+                const isEditingItem = editingProductId === product.id;
+                return (
+                  <div
+                    key={product.id}
+                    className="flex flex-col gap-2 rounded-md border p-3 bg-gray-50/50"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        {!isEditingItem ? (
+                          <>
+                            <p className="font-semibold break-words">
+                              {product.quantity}x {product.name}
+                            </p>
+                            <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-600 mt-1">
+                              <Badge variant="secondary">Madeira: {product.woodColor || 'N/A'}</Badge>
+                              <Badge variant="secondary">Revest.: {product.coatingColor || 'N/A'}</Badge>
+                            </div>
+                            {product.details && (
+                              <p className="text-xs text-gray-500 mt-1 break-words">
+                                Detalhes: {product.details}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <Input
+                              value={product.name ?? ''}
+                              onChange={(e) => handleInlineChange(product.id, 'name', e.target.value)}
+                              placeholder="Nome do Produto"
+                            />
+                            <Input
+                              type="number"
+                              min="1"
+                              value={product.quantity ?? 1}
+                              onChange={(e) =>
+                                handleInlineChange(product.id, 'quantity', parseInt(e.target.value) || 1)
+                              }
+                              placeholder="Quantidade"
+                            />
+                            <Input
+                              value={product.woodColor ?? ''}
+                              onChange={(e) => handleInlineChange(product.id, 'woodColor', e.target.value)}
+                              placeholder="Cor da Madeira"
+                            />
+                            <Input
+                              value={product.coatingColor ?? ''}
+                              onChange={(e) => handleInlineChange(product.id, 'coatingColor', e.target.value)}
+                              placeholder="Cor do Revestimento"
+                            />
+                            <Textarea
+                              className="md:col-span-2"
+                              rows={2}
+                              value={product.details ?? ''}
+                              onChange={(e) => handleInlineChange(product.id, 'details', e.target.value)}
+                              placeholder="Detalhes específicos do produto..."
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!isEditingItem ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => startEditProduct(product)}
+                            title="Editar item"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-600"
+                              onClick={confirmEditProduct}
+                              title="Confirmar edição"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={cancelEditProduct}
+                              title="Cancelar"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    {product.details && <p className="text-xs text-gray-500 mt-1">Detalhes: {product.details}</p>}
                   </div>
-                  <Button type="button" variant="ghost" size="icon" className="text-red-500 hover:bg-red-100 h-8 w-8" onClick={() => removeProduct(product.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              {formData.products.length === 0 && <p className="text-sm text-center text-gray-500 py-4">Nenhum produto adicionado a este pedido.</p>}
+                );
+              })}
+
+              {formData.products.length === 0 && (
+                <p className="text-sm text-center text-gray-500 py-4">
+                  Nenhum produto vinculado a este pedido.
+                </p>
+              )}
             </div>
           </div>
 
