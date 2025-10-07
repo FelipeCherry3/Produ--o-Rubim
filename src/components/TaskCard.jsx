@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Calendar, Clock, User, AlertCircle, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-const TaskCard = ({ task, onDragStart, onDragEnd, onClick }) => {
+const TaskCard = ({ task, onDragStart, onDragEnd, onClick, deadlineFlag = 'normal' }) => {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'alta': return 'bg-red-100 text-red-800 border-red-200';
@@ -19,6 +19,12 @@ const TaskCard = ({ task, onDragStart, onDragEnd, onClick }) => {
     }
     return null;
   };
+  const bgClass =
+    deadlineFlag === 'overdue'
+      ? 'bg-red-50 border-red-200'
+      : deadlineFlag === 'soon'
+      ? 'bg-yellow-50 border-yellow-200'
+      : 'bg-white border-gray-200';
 
   const totalProducts = task.products.reduce((sum, product) => sum + product.quantity, 0);
 
@@ -29,7 +35,7 @@ const TaskCard = ({ task, onDragStart, onDragEnd, onClick }) => {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       whileHover={{ y: -2 }}
-      className={`task-card p-4 mb-3 priority-${task.priority}`}
+      className={`rounded-lg border shadow-sm p-3 cursor-grab active:cursor-grabbing ${bgClass}`}
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onDragEnd={onDragEnd}
