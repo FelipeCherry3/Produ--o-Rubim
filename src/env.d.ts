@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly BACK_URL?: string;
-  readonly LOGIN_SPRING?: string;
-  readonly SPRING_PASSWORD?: string; // NOTA: Não coloque segredos sensíveis no frontend em produção.
+  readonly VITE_BACK_URL?: string;
+  // se quiser adicionar outras, todas devem começar com VITE_
+  readonly VITE_LOGIN_SPRING?: string;
+  readonly VITE_SOME_PUBLIC_KEY?: string;
 }
 
 interface ImportMeta {

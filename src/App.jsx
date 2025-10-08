@@ -47,8 +47,8 @@ function App() {
   const login = async () => {
     try {
       const form = new URLSearchParams();
-      form.set('username', 'admin');
-      form.set('password', 'senha123');
+      form.set('username', import.meta.env.VITE_BACK_USER || 'admin');
+      form.set('password', import.meta.env.VITE_SPRING_PASSWORD || '');
 
       const res = await api.post('/login', form.toString(), {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
