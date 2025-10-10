@@ -110,37 +110,31 @@ function App() {
     }
   };
 
-  const syncBlingPedidos = async (passwordArg) => {
+  const syncBlingPedidos = async (syncPassword) => {
   try {
     setSyncInProgress(true);
 
-    // garante string
-    const pwd = typeof passwordArg === 'string'
+   const pwd = typeof passwordArg === 'string'
       ? passwordArg
       : String(passwordArg?.password ?? passwordArg ?? '');
 
-    // sessão + CSRF (se exigidos pelo back)
+    // (Opcional) garantir sessão + CSRF para rotas que exigem:   
     const okLogin = await login();
     if (!okLogin) { setSyncInProgress(false); return; }
     await fetchCsrfToken();
 
-    // valida senha
-    if (!requirePassword(pwd)) { setSyncInProgress(false); return; }
+    if (!requirePassword(syncPassword)) { setSyncInProgress(false); return; }
 
-    // valida período
+    // Validações simples de data
     if (!dataInicialSync || !dataFinalSync) {
       toast({ title: '⚠️ Período inválido', description: 'Selecione data inicial e final.' });
       setSyncInProgress(false);
       return;
     }
 
-    // chama o back com a senha correta na query
+    // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
     const { data } = await api.get('/pedidos/getVendas', {
-      params: {
-        dataInicial: dataInicialSync,
-        dataFinal:   dataFinalSync,
-        password:    pwd, // 👈 aqui vai string, não objeto
-      },
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: pwd },
       responseType: 'text',
     });
 
@@ -148,22 +142,19 @@ function App() {
       title: '✅ Sincronização concluída',
       description: (typeof data === 'string' ? data : 'Pedidos sincronizados com sucesso.'),
     });
+    setSyncPassword('');
 
-    // se você tem o estado [syncPassword, setSyncPassword], pode limpar:
-    setSyncPassword?.('');
-
-    // recarrega pedidos (se essa rota também exige senha, passe a mesma)
-    await fetchPedidos?.(pwd);
-
-  } catch (err) {
-    console.error('Erro sincronizar pedidos:', err);
-    toast({
-      title: '❌ Erro ao sincronizar',
-      description: err?.response?.data || err?.message || 'Falha ao sincronizar pedidos.',
-      variant: 'destructive',
-    });
-  } finally {
-    setSyncInProgress(false);
+    // Se quiser já recarregar os pedidos do seu board:
+    await fetchPedidos();
+    } catch (err) {
+      console.error('Erro sincronizar pedidos:', err);
+      toast({
+        title: '❌ Erro ao sincronizar',
+        description: err?.response?.data || err?.message || 'Falha ao sincronizar pedidos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncInProgress(false);
     }
   };
 
@@ -486,7 +477,7 @@ function App() {
                       <Button variant="outline" onClick={() => setBlingDialogOpen(false)} disabled={syncInProgress || authInProgress}>
                         Fechar
                       </Button>
-                      <Button onClick={syncBlingPedidos(syncPassword)} disabled={syncInProgress || authInProgress}>
+                      <Button onClick={syncBlingPedidos} disabled={syncInProgress || authInProgress}>
                         {syncInProgress ? 'Sincronizando…' : '🔄 Sincronizar'}
                       </Button>
                     </DialogFooter>
