@@ -35,6 +35,13 @@ function App() {
   const [confirmMove, setConfirmMove] = useState({ open: false, task: null, newSector: null });
   const [isMoving, setIsMoving] = useState(false);
 
+  // ▶️ Estados do fluxo Bling
+  const [blingDialogOpen, setBlingDialogOpen] = useState(false);
+  const [authInProgress, setAuthInProgress] = useState(false);
+  const [syncInProgress, setSyncInProgress] = useState(false);
+  const [dataInicialSync, setDataInicialSync] = useState(() => new Date().toISOString().split('T')[0]); // hoje
+  const [dataFinalSync, setDataFinalSync] = useState(() => new Date().toISOString().split('T')[0]);     // hoje
+
   const sectorMap = {
     usinagem:   { id: 1, name: 'Usinagem' },
     montagem:   { id: 3, name: 'Montagem' },
@@ -42,6 +49,92 @@ function App() {
     expedicao:  { id: 6, name: 'Expedição' },
   };
   const sectors = Object.keys(sectorMap);
+
+  // === BLING FLUXO FUNCTIONS ===
+
+  const startBlingAuth = async () => {
+  try {
+    setAuthInProgress(true);
+
+    // (Opcional mas recomendado) garantir sessão + CSRF antes, caso seu /authorize exija auth
+    const okLogin = await login();
+    if (!okLogin) { setAuthInProgress(false); return; }
+    await fetchCsrfToken();
+
+    // Chama seu backend /authorize
+    const res = await api.get('/authorize', { responseType: 'text' });
+    let text = typeof res.data === 'string' ? res.data : String(res.data || '');
+
+    // Seu /authorize retorna texto no formato "Redirecione o usuário para: <URL>"
+    // Vamos extrair a URL com um split simples:
+    let url = text;
+    const idx = text.indexOf('http');
+    if (idx >= 0) url = text.slice(idx).trim();
+
+    if (!url.startsWith('http')) {
+      throw new Error('Não foi possível obter a URL de autorização do Bling.');
+    }
+
+    // Abre em nova aba (ou popup); o Bling vai redirecionar para SEU /callback no back
+    window.open(url, '_blank', 'noopener,noreferrer');
+
+    toast({
+      title: '🔐 Autorização iniciada',
+      description: 'Finalize no site do Bling. Depois volte aqui para sincronizar.',
+      });
+    } catch (err) {
+      console.error('Erro iniciar autorização:', err);
+      toast({
+        title: '❌ Erro na autorização',
+        description: err?.message || 'Falha ao obter a URL de autorização.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAuthInProgress(false);
+    }
+  };
+
+  const syncBlingPedidos = async () => {
+  try {
+    setSyncInProgress(true);
+
+    // (Opcional) garantir sessão + CSRF para rotas que exigem:   
+    const okLogin = await login();
+    if (!okLogin) { setSyncInProgress(false); return; }
+    await fetchCsrfToken();
+
+    // Validações simples de data
+    if (!dataInicialSync || !dataFinalSync) {
+      toast({ title: '⚠️ Período inválido', description: 'Selecione data inicial e final.' });
+      setSyncInProgress(false);
+      return;
+    }
+
+    // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
+    const { data } = await api.get('/pedidos/getVendas', {
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync },
+      responseType: 'text',
+    });
+
+    toast({
+      title: '✅ Sincronização concluída',
+      description: (typeof data === 'string' ? data : 'Pedidos sincronizados com sucesso.'),
+    });
+
+    // Se quiser já recarregar os pedidos do seu board:
+    await fetchPedidos();
+    } catch (err) {
+      console.error('Erro sincronizar pedidos:', err);
+      toast({
+        title: '❌ Erro ao sincronizar',
+        description: err?.response?.data || err?.message || 'Falha ao sincronizar pedidos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncInProgress(false);
+    }
+  };
+
 
   // === LOGIN ===
   const login = async () => {
@@ -304,6 +397,60 @@ function App() {
                   <Filter className="w-4 h-4 mr-2" />
                   Filtros
                 </Button>
+                {/* ▶️ NOVO: Botões do fluxo Bling */}
+                <Button variant="default" onClick={() => setBlingDialogOpen(true)}>
+                  🔄 Sincronizar Bling
+                </Button>
+                <Dialog open={blingDialogOpen} onOpenChange={(open) => setBlingDialogOpen(open)}>
+                  <DialogContent className="sm:max-w-[560px]">
+                    <DialogHeader>
+                      <DialogTitle>Sincronizar pedidos do Bling</DialogTitle>
+                      <DialogDescription>
+                        1) Autorize o acesso no Bling. 2) Selecione o período e sincronize os pedidos.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="mt-4 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Button onClick={startBlingAuth} disabled={authInProgress}>
+                          {authInProgress ? 'Abrindo autorização…' : '🔐 Autorizar no Bling'}
+                        </Button>
+                        <span className="text-xs text-gray-500">
+                          Uma nova aba será aberta; finalize lá e volte aqui.
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
+                          <Input
+                            type="date"
+                            value={dataInicialSync}
+                            onChange={(e) => setDataInicialSync(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Data final</label>
+                          <Input
+                            type="date"
+                            value={dataFinalSync}
+                            onChange={(e) => setDataFinalSync(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <DialogFooter className="mt-6 gap-2 sm:gap-0">
+                      <Button variant="outline" onClick={() => setBlingDialogOpen(false)} disabled={syncInProgress || authInProgress}>
+                        Fechar
+                      </Button>
+                      <Button onClick={syncBlingPedidos} disabled={syncInProgress || authInProgress}>
+                        {syncInProgress ? 'Sincronizando…' : '🔄 Sincronizar'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 <Button
                   variant="outline"
                   onClick={() =>
