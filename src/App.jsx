@@ -135,7 +135,7 @@ function App() {
 
     // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
     const { data } = await api.get('/pedidos/getVendas', {
-      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: syncPassword },
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: pwd },
       responseType: 'text',
     });
 
