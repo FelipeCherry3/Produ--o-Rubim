@@ -110,7 +110,7 @@ function App() {
     }
   };
 
-  const syncBlingPedidos = async (passwordFront) => {
+  const syncBlingPedidos = async (syncPassword) => {
   try {
     setSyncInProgress(true);
 
@@ -130,7 +130,7 @@ function App() {
 
     // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
     const { data } = await api.get('/pedidos/getVendas', {
-      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: passwordFront },
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: syncPassword },
       responseType: 'text',
     });
 
