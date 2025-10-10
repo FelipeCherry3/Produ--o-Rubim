@@ -42,6 +42,22 @@ function App() {
   const [dataInicialSync, setDataInicialSync] = useState(() => new Date().toISOString().split('T')[0]); // hoje
   const [dataFinalSync, setDataFinalSync] = useState(() => new Date().toISOString().split('T')[0]);     // hoje
 
+
+  // Dialogs e senhas
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [loadPassword, setLoadPassword] = useState('');
+  const [syncPassword, setSyncPassword] = useState('');
+  const [movePassword, setMovePassword] = useState('');
+
+  // Validação simples
+  const requirePassword = (pwd) => {
+    if (!pwd || String(pwd).trim() === '') {
+      toast({ title: '⚠️ Senha obrigatória', description: 'Digite a senha para continuar.', variant: 'destructive' });
+      return false;
+    }
+    return true;
+  };
+
   const sectorMap = {
     usinagem:   { id: 1, name: 'Usinagem' },
     montagem:   { id: 3, name: 'Montagem' },
@@ -94,7 +110,7 @@ function App() {
     }
   };
 
-  const syncBlingPedidos = async () => {
+  const syncBlingPedidos = async (passwordFront) => {
   try {
     setSyncInProgress(true);
 
@@ -102,6 +118,8 @@ function App() {
     const okLogin = await login();
     if (!okLogin) { setSyncInProgress(false); return; }
     await fetchCsrfToken();
+
+    if (!requirePassword(syncPassword)) { setSyncInProgress(false); return; }
 
     // Validações simples de data
     if (!dataInicialSync || !dataFinalSync) {
@@ -112,7 +130,7 @@ function App() {
 
     // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
     const { data } = await api.get('/pedidos/getVendas', {
-      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync },
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: passwordFront },
       responseType: 'text',
     });
 
@@ -120,6 +138,7 @@ function App() {
       title: '✅ Sincronização concluída',
       description: (typeof data === 'string' ? data : 'Pedidos sincronizados com sucesso.'),
     });
+    setSyncPassword('');
 
     // Se quiser já recarregar os pedidos do seu board:
     await fetchPedidos();
@@ -180,7 +199,7 @@ function App() {
   };
 
   // === BUSCAR PEDIDOS ===
-  const fetchPedidos = async () => {
+  const fetchPedidos = async (passwordFront) => {
     try {
       const dataInicial = new Date('2024-01-01');
       const dataFinal = new Date('2025-12-31');
@@ -189,6 +208,7 @@ function App() {
         params: {
           dataInicial: dataInicial.toISOString().split('T')[0],
           dataFinal:   dataFinal.toISOString().split('T')[0],
+          password:    passwordFront,
         },
       });
 
@@ -233,12 +253,12 @@ function App() {
     }
   };
 
-  const handleLoadPedidos = async () => {
+  const handleLoadPedidos = async (passwordFront) => {
     const okLogin = await login();
     if (!okLogin) return;
     const okCsrf = await fetchCsrfToken();
     if (!okCsrf) return;
-    await fetchPedidos();
+    await fetchPedidos(passwordFront);
   };
 
   const mapSectorFromId = (setorId) => {
@@ -438,6 +458,15 @@ function App() {
                           />
                         </div>
                       </div>
+                      <div className="mt-2">
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                       <Input
+                         type="password"
+                         placeholder="Senha para sincronização"
+                         value={syncPassword}
+                         onChange={(e) => setSyncPassword(e.target.value)}
+                       />
+                      </div>
                     </div>
 
                     <DialogFooter className="mt-6 gap-2 sm:gap-0">
@@ -463,10 +492,10 @@ function App() {
                   <BarChart3 className="w-4 h-4 mr-2" />
                   Relatórios
                 </Button>
-                <Button variant="default" onClick={handleLoadPedidos}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Carregar Pedidos
-                </Button>
+                <Button variant="default" onClick={() => setLoadDialogOpen(true)}>
+                   <Download className="w-4 h-4 mr-2" />
+                   Carregar Pedidos
+                 </Button>
               </div>
             </div>
           </motion.div>
@@ -557,7 +586,41 @@ function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ▶️ NOVO: Modal Carregar Pedidos */}
+      <Dialog open={loadDialogOpen} onOpenChange={(o) => setLoadDialogOpen(o)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Digite a senha</DialogTitle>
+            <DialogDescription>Necessária para carregar os pedidos do servidor.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Input
+              type="password"
+              placeholder="Senha"
+              value={loadPassword}
+              onChange={(e) => setLoadPassword(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setLoadDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!requirePassword(loadPassword)) return;
+                setLoadDialogOpen(false);
+                await handleLoadPedidos(loadPassword);
+                setLoadPassword('');
+              }}
+            >
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+    
   );
 }
 
