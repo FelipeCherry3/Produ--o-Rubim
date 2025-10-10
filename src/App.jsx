@@ -114,6 +114,11 @@ function App() {
   try {
     setSyncInProgress(true);
 
+    const pwd =
+      typeof syncPassword === 'string'
+        ? syncPassword
+        : String(syncPassword?.password ?? syncPassword ?? '');
+
     // (Opcional) garantir sessão + CSRF para rotas que exigem:   
     const okLogin = await login();
     if (!okLogin) { setSyncInProgress(false); return; }
