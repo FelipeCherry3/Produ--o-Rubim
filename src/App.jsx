@@ -110,20 +110,15 @@ function App() {
     }
   };
 
-  const syncBlingPedidos = async (syncPassword) => {
+  const syncBlingPedidos = async () => {
   try {
     setSyncInProgress(true);
 
-   const pwd = typeof passwordArg === 'string'
-      ? passwordArg
-      : String(passwordArg?.password ?? passwordArg ?? '');
 
     // (Opcional) garantir sessão + CSRF para rotas que exigem:   
     const okLogin = await login();
     if (!okLogin) { setSyncInProgress(false); return; }
     await fetchCsrfToken();
-
-    if (!requirePassword(syncPassword)) { setSyncInProgress(false); return; }
 
     // Validações simples de data
     if (!dataInicialSync || !dataFinalSync) {
@@ -134,7 +129,7 @@ function App() {
 
     // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
     const { data } = await api.get('/pedidos/getVendas', {
-      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: pwd },
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync},
       responseType: 'text',
     });
 
@@ -461,15 +456,6 @@ function App() {
                             onChange={(e) => setDataFinalSync(e.target.value)}
                           />
                         </div>
-                      </div>
-                      <div className="mt-2">
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                       <Input
-                         type="password"
-                         placeholder="Senha para sincronização"
-                         value={syncPassword}
-                         onChange={(e) => setSyncPassword(e.target.value)}
-                       />
                       </div>
                     </div>
 
