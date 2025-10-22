@@ -30,7 +30,7 @@ const classifyCategory = (productNameRaw) => {
   const isChair =
     s.includes('CADEIRA') || s.includes('POLTRONA') || s.includes('BANCO') || s.includes('CADEIRAO');
   const isTable =
-    s.includes('MESA') || s.includes('TAMPO') || s.includes('APARADOR') || s.includes('REDONDA') || s.includes('RETANGULAR');
+    s.includes('MESA') || s.includes('TAMPO') || s.includes('REDONDA') || s.includes('RETANGULAR');
 
   if (isChair) return 'CADEIRAS';
   if (isTable) return 'MESAS';
@@ -215,7 +215,7 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
       .sub { margin: 2px 0 0; }
       h2 { font-size: 16px; margin: 20px 0 8px; text-align: center; }
       h3 { font-size: 14px; margin: 16px 0 8px; }
-      .resumo, .pedidos, .agg { page-break-inside: avoid; }
+      section { margin-bottom: 24px; }
       ul { margin: 6px 0 0 18px; }
       li { margin: 2px 0; }
       .pedido {
@@ -278,15 +278,6 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
         <section class="agg">
           <h2>Itens no Setor (Agrupados por Categoria)</h2>
           ${itensPorCategoriaHtml}
-        </section>
-
-        <section class="resumo">
-          <h2>Resumo Rápido (Modelo — Quantidade)</h2>
-          ${
-            summary.length
-              ? `<ul>${itensSetorHtml}</ul>`
-              : '<p class="muted">Sem itens.</p>'
-          }
         </section>
 
         <section class="pedidos">
