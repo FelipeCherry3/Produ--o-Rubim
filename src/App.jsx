@@ -230,6 +230,7 @@ function App() {
           woodColor: item.corMadeira || '',
           coatingColor: item.corRevestimento || '',
           details: item.descricaoDetalhada || '',
+          detalhesMedidas: item.detalhesMedidas || '',
         })),
         sector: mapSectorFromId(pedido.setor?.id),
         priority: pedido.priority || 'normal',

@@ -35,7 +35,8 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
               p.woodColor ? ` • Madeira: ${p.woodColor}` : ''
             }${p.coatingColor ? ` • Revest.: ${p.coatingColor}` : ''}${
               p.details ? ` • Detalhes: ${p.details}` : ''
-            }</li>`
+            } ${p.detalhesMedidas ? ` • Medidas: ${p.detalhesMedidas}` : ''}</li>`
+
         )
         .join('');
 
@@ -167,6 +168,10 @@ const ProductionSummary = ({ tasks, sector, extraTasksForSummary = [] }) => {
         let label;
 
         switch (sector) {
+          case 'usinagem':
+            key = `${product.name} - ${product.detalhesMedidas || 'N/A'}`;
+            label = `${product.name} (${product.detalhesMedidas || 'N/A'})`;
+            break;
           case 'tapeçaria':
             key = `${product.name} - ${product.coatingColor || 'N/A'}`;
             label = `${product.name} (${product.coatingColor || 'N/A'})`;
