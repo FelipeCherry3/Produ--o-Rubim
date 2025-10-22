@@ -48,7 +48,7 @@ const detailBySector = (p, sector) => {
       return (p.woodColor && p.woodColor.trim()) ? p.woodColor.trim() : '—';
     default:
       // fallback: usa "details" (descricaoDetalhada) se for útil para o setor
-      return (p.details && p.details.trim()) ? p.details.trim() : '—';
+      return '—';
   }
 };
 
