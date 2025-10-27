@@ -723,46 +723,57 @@ function App() {
           </Button>
         </div>
 
-        {/* Tabela */}
-        <div className="overflow-auto rounded border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr className="text-left">
-                <th className="p-3">Selecionar</th>
-                <th className="p-3">Nº Pedido</th>
-                <th className="p-3">Data</th>
-                <th className="p-3">Cliente</th>
-                <th className="p-3">Total Peças</th>
-              </tr>
-            </thead>
-            <tbody>
-              {baixaList.length === 0 && (
-                <tr>
-                  <td className="p-4 text-gray-500" colSpan={5}>Nenhum pedido encontrado.</td>
+                {/* Tabela */}
+                {/* Tabela com scroll interno e altura máxima */}
+        <div className="border rounded-md overflow-hidden mt-2">
+          <div className="max-h-[400px] overflow-y-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="text-left">
+                  <th className="p-3">Selecionar</th>
+                  <th className="p-3">Nº Pedido</th>
+                  <th className="p-3">Data</th>
+                  <th className="p-3">Cliente</th>
+                  <th className="p-3">Total Peças</th>
                 </tr>
-              )}
-              {baixaList.map((t) => {
-                const selected = baixaSelected.has(t.orderNumber);
-                const dataExib = (t.dataEntrega || t.dataEmissao || '').slice(0, 10);
-                return (
-                  <tr key={t.orderNumber} className="border-t hover:bg-gray-50">
-                    <td className="p-3">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleSelectOne(t.orderNumber)}
-                      />
+              </thead>
+              <tbody>
+                {baixaList.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-gray-500" colSpan={5}>
+                      Nenhum pedido encontrado.
                     </td>
-                    <td className="p-3 font-medium">{t.orderNumber}</td>
-                    <td className="p-3">{dataExib || '—'}</td>
-                    <td className="p-3">{t.client || '—'}</td>
-                    <td className="p-3">{getTotalPecas(t)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+                {baixaList.map((t) => {
+                  const selected = baixaSelected.has(t.orderNumber);
+                  const dataExib = (t.dataEntrega || t.dataEmissao || '').slice(0, 10);
+                  return (
+                    <tr
+                      key={t.orderNumber}
+                      className="border-t hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleSelectOne(t.orderNumber)}
+                        />
+                      </td>
+                      <td className="p-3 font-medium whitespace-nowrap">
+                        {t.orderNumber}
+                      </td>
+                      <td className="p-3">{dataExib || '—'}</td>
+                      <td className="p-3 truncate max-w-[200px]">{t.client || '—'}</td>
+                      <td className="p-3">{getTotalPecas(t)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
+
 
         <DialogFooter className="mt-4 gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => setBaixaDialogOpen(false)} disabled={baixaInProgress}>
