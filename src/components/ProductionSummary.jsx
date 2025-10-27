@@ -352,7 +352,11 @@ const ProductionSummary = ({ tasks, sector, extraTasksForSummary = [] }) => {
   }, [tasks, sector, extraTasksForSummary]);
 
   const handlePrint = () => {
-    const html = buildPrintableHtml({ tasks, sector, summary });
+    // Mesma regra do summary: em usinagem, somar tasks + extraTasksForSummary
+    const tasksForPrint = sector === 'usinagem'
+      ? [...(tasks || []), ...(extraTasksForSummary || [])]
+      : (tasks || []);
+    const html = buildPrintableHtml({ tasks: tasksForPrint, sector, summary });
 
     // 1) Tenta abrir janela e escrever diretamente (mais rápido)
     try {
