@@ -15,6 +15,52 @@ const sectorLabel = (key) => {
   return map[key] || key;
 };
 
+// --- Helpers de categorização/normalização usados na impressão ---
+const norm = (v) =>
+  (v ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim();
+
+/** Classifica o produto em CADEIRAS | MESAS | OUTROS com base no nome */
+const classifyCategory = (productNameRaw) => {
+  const s = norm(productNameRaw).toUpperCase();
+  // palavras-chave — ajuste livre conforme seu catálogo
+  const isChair =
+    s.includes('CADEIRA') || s.includes('POLTRONA') || s.includes('BANCO') || s.includes('CADEIRAO');
+  const isTable =
+    s.includes('MESA') || s.includes('TAMPO') || s.includes('REDONDA') || s.includes('RETANGULAR');
+
+  if (isChair) return 'CADEIRAS';
+  if (isTable) return 'MESAS';
+  return 'OUTROS';
+};
+
+/** Retorna o detalhe a exibir conforme setor */
+const detailBySector = (p, sector) => {
+  switch (sector) {
+    case 'usinagem':
+      return (p.detalhesMedidas && p.detalhesMedidas.trim()) ? p.detalhesMedidas.trim() : '—';
+    case 'tapeçaria':
+      return (p.coatingColor && p.coatingColor.trim()) ? p.coatingColor.trim() : '—';
+    case 'lustracao':
+      return (p.woodColor && p.woodColor.trim()) ? p.woodColor.trim() : '—';
+    default:
+      // fallback: usa "details" (descricaoDetalhada) se for útil para o setor
+      return '—';
+  }
+};
+
+/** Ordenação por categoria (cadeiras → mesas → outros) */
+const categoryOrderIndex = (cat) => {
+  switch (cat) {
+    case 'CADEIRAS': return 0;
+    case 'MESAS': return 1;
+    default: return 2; // OUTROS
+  }
+};
+
 const buildPrintableHtml = ({ tasks, sector, summary }) => {
   const now = new Date();
   const dataImpressao = now.toLocaleString('pt-BR');
@@ -25,7 +71,7 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
   const fmt = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
   const ucFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
-  // Cabeçalho + corpo
+  // ====== (1) Montagem da LISTA DE PEDIDOS (mantida do seu código) ======
   const pedidosHtml = tasks
     .map((t) => {
       const itens = (t.products || [])
@@ -35,7 +81,7 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
               p.woodColor ? ` • Madeira: ${p.woodColor}` : ''
             }${p.coatingColor ? ` • Revest.: ${p.coatingColor}` : ''}${
               p.details ? ` • Detalhes: ${p.details}` : ''
-            }</li>`
+            }${p.detalhesMedidas ? ` • Medidas: ${p.detalhesMedidas}` : ''}</li>`
         )
         .join('');
 
@@ -60,14 +106,105 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
     })
     .join('');
 
+  // ====== (2) NOVA TABELA "ITENS AGRUPADOS POR CATEGORIA" ======
+  // Flatten de todos os produtos das tasks
+  const allProducts = [];
+  (tasks || []).forEach((t) => {
+    (t.products || []).forEach((p) => {
+      const cat = classifyCategory(p.name || '');
+      const detail = detailBySector(p, sector);
+      const cleanName = (p.name || '—').trim();
+      const qty = Number.isFinite(+p.quantity) ? +p.quantity : 0;
+
+      // chave de agregação: categoria + nome + detalhe
+      const key = `${cat}__${norm(cleanName).toUpperCase()}__${norm(detail).toUpperCase()}`;
+      allProducts.push({
+        key,
+        categoria: cat,
+        nome: cleanName,
+        detalhe: detail,
+        quantidade: qty,
+      });
+    });
+  });
+
+  // Agregar quantidades por (categoria, nome, detalhe)
+  const aggMap = new Map();
+  allProducts.forEach((row) => {
+    if (aggMap.has(row.key)) {
+      aggMap.set(row.key, {
+        ...aggMap.get(row.key),
+        quantidade: aggMap.get(row.key).quantidade + row.quantidade,
+      });
+    } else {
+      aggMap.set(row.key, { ...row });
+    }
+  });
+
+  // Ordenar: categoria (cadeiras→mesas→outros), depois nome (A-Z), depois detalhe (A-Z)
+  const aggregated = Array.from(aggMap.values()).sort((a, b) => {
+    const byCat = categoryOrderIndex(a.categoria) - categoryOrderIndex(b.categoria);
+    if (byCat !== 0) return byCat;
+    const byName = a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+    if (byName !== 0) return byName;
+    return a.detalhe.localeCompare(b.detalhe, 'pt-BR', { sensitivity: 'base' });
+  });
+
+  // Render por categoria com tabela
+  const renderTable = (rows) => {
+    if (!rows.length) return '<p class="muted">Sem itens nesta categoria.</p>';
+    const trs = rows
+      .map(
+        (r) => `
+      <tr>
+        <td class="td-left">${r.nome}</td>
+        <td class="td-center">${r.quantidade}</td>
+        <td class="td-left">${r.detalhe}</td>
+      </tr>`
+      )
+      .join('');
+    return `
+      <div class="tbl-wrap">
+        <table class="table-agg">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Quantidade</th>
+              <th>Detalhes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${trs}
+          </tbody>
+        </table>
+      </div>
+    `;
+  };
+
+  const catCadeiras = aggregated.filter((r) => r.categoria === 'CADEIRAS');
+  const catMesas = aggregated.filter((r) => r.categoria === 'MESAS');
+  const catOutros = aggregated.filter((r) => r.categoria === 'OUTROS');
+
+  const itensPorCategoriaHtml = `
+    <h3 class="cat-title">Cadeiras</h3>
+    ${renderTable(catCadeiras)}
+    <h3 class="cat-title">Mesas</h3>
+    ${renderTable(catMesas)}
+    <h3 class="cat-title">Outros</h3>
+    ${renderTable(catOutros)}
+  `;
+
+  // ====== (3) Seu resumo atual (mantido) ======
   const itensSetorHtml = summary
     .map((s) => `<li><b>${s.quantity}</b> — ${s.label}</li>`)
     .join('');
 
-  // CSS da impressão
+
+  // ====== CSS revisado =======
   const styles = `
     <style>
       * { box-sizing: border-box; }
+      html, body { height: 100%; }
       body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111; }
       .header {
         border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px;
@@ -77,9 +214,9 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
       .meta { text-align: right; font-size: 12px; color: #444; }
       .titulo { margin: 0; font-size: 18px; }
       .sub { margin: 2px 0 0; }
-      h2 { font-size: 16px; margin: 20px 0 8px; }
+      h2 { font-size: 16px; margin: 20px 0 8px; text-align: center; }
       h3 { font-size: 14px; margin: 16px 0 8px; }
-      .resumo, .pedidos { page-break-inside: avoid; }
+      section { margin-bottom: 24px; }
       ul { margin: 6px 0 0 18px; }
       li { margin: 2px 0; }
       .pedido {
@@ -96,6 +233,22 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
       .footer {
         margin-top: 24px; padding-top: 12px; border-top: 1px dashed #bbb; font-size: 11px; color: #555;
       }
+
+      /* Tabela agregada centralizada e com bordas */
+      .cat-title { margin-top: 18px; text-transform: uppercase; letter-spacing: .6px; }
+      .tbl-wrap { display: flex; justify-content: center; margin-bottom: 10px; }
+      .table-agg { border-collapse: collapse; width: 100%; max-width: 900px; }
+      .table-agg th, .table-agg td {
+        border: 1px solid #444; padding: 6px 8px; font-size: 12px;
+      }
+      .table-agg thead th {
+        text-align: center; background: #f0f0f0; font-weight: 700;
+      }
+      .td-center { text-align: center; width: 110px; }
+      .td-left { text-align: left; }
+
+      .muted { font-size: 12px; color: #666; text-align: center; }
+
       @media print {
         .no-print { display: none !important; }
         body { margin: 12mm; }
@@ -123,18 +276,14 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
           </div>
         </header>
 
-        <section class="resumo">
-          <h2>Itens no Setor (Modelo — Quantidade)</h2>
-          ${
-            summary.length
-              ? `<ul>${itensSetorHtml}</ul>`
-              : '<p>Sem itens.</p>'
-          }
+        <section class="agg">
+          <h2>Itens no Setor (Agrupados por Categoria)</h2>
+          ${itensPorCategoriaHtml}
         </section>
 
         <section class="pedidos">
           <h2>Lista de Pedidos</h2>
-          ${pedidosHtml || '<p>Nenhum pedido neste setor.</p>'}
+          ${pedidosHtml || '<p class="muted">Nenhum pedido neste setor.</p>'}
         </section>
 
         <footer class="footer">
@@ -153,10 +302,11 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
 };
 
 const ProductionSummary = ({ tasks, sector, extraTasksForSummary = [] }) => {
+  // mantém seu resumo visível (sem alterações na regra)
   const summary = useMemo(() => {
     const productMap = new Map();
 
-    const sourceTasks = sector === 'usinagem' 
+    const sourceTasks = sector === 'usinagem'
       ? [...(tasks || []), ...(extraTasksForSummary || [])]
       : (tasks || []);
 
@@ -167,6 +317,10 @@ const ProductionSummary = ({ tasks, sector, extraTasksForSummary = [] }) => {
         let label;
 
         switch (sector) {
+          case 'usinagem':
+            key = `${product.name} - ${product.detalhesMedidas || 'N/A'}`;
+            label = `${product.name} (${product.detalhesMedidas || 'N/A'})`;
+            break;
           case 'tapeçaria':
             key = `${product.name} - ${product.coatingColor || 'N/A'}`;
             label = `${product.name} (${product.coatingColor || 'N/A'})`;
@@ -199,44 +353,45 @@ const ProductionSummary = ({ tasks, sector, extraTasksForSummary = [] }) => {
   }, [tasks, sector, extraTasksForSummary]);
 
   const handlePrint = () => {
-  const html = buildPrintableHtml({ tasks, sector, summary });
+    // Mesma regra do summary: em usinagem, somar tasks + extraTasksForSummary
+    const tasksForPrint = sector === 'usinagem'
+      ? [...(tasks || []), ...(extraTasksForSummary || [])]
+      : (tasks || []);
+    const html = buildPrintableHtml({ tasks: tasksForPrint, sector, summary });
 
-  // 1) Tenta abrir janela e escrever diretamente (mais rápido)
-  try {
-    const win = window.open('', '_blank'); // sem noopener/noreferrer para não quebrar o write em alguns navegadores
-    if (win && win.document) {
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      return;
+    // 1) Tenta abrir janela e escrever diretamente (mais rápido)
+    try {
+      const win = window.open('', '_blank'); // sem noopener/noreferrer para não quebrar o write em alguns navegadores
+      if (win && win.document) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        return;
+      }
+    } catch (e) {
+      console.warn('document.write falhou, usando Blob URL:', e);
     }
-  } catch (e) {
-    // cai para o fallback
-    console.warn('document.write falhou, usando Blob URL:', e);
-  }
 
-  // 2) Fallback robusto: Blob URL (funciona mesmo quando o write é bloqueado)
-  try {
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const win2 = window.open(url, '_blank'); // abrir a página já com o conteúdo
-    // Se quiser, pode revogar depois de alguns segundos:
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    if (win2) return;
-  } catch (e) {
-    console.error('Blob URL falhou:', e);
-  }
+    // 2) Fallback robusto: Blob URL (funciona mesmo quando o write é bloqueado)
+    try {
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const win2 = window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      if (win2) return;
+    } catch (e) {
+      console.error('Blob URL falhou:', e);
+    }
 
-  // 3) Último recurso: data URL (menos ideal, mas quebra o galho)
-  try {
-    const encoded = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-    window.location.href = encoded; // abre na própria aba
-  } catch (e) {
-    console.error('Falha geral ao abrir impressão:', e);
-    alert('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups.');
-  }
-};
-
+    // 3) Último recurso: data URL (menos ideal, mas quebra o galho)
+    try {
+      const encoded = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+      window.location.href = encoded; // abre na própria aba
+    } catch (e) {
+      console.error('Falha geral ao abrir impressão:', e);
+      alert('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups.');
+    }
+  };
 
   if (summary.length === 0) {
     return (

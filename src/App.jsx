@@ -43,6 +43,14 @@ function App() {
   const [dataFinalSync, setDataFinalSync] = useState(() => new Date().toISOString().split('T')[0]);     // hoje
 
 
+  // ▶️ Fluxo Baixa de Pedidos
+  const [baixaDialogOpen, setBaixaDialogOpen] = useState(false);
+  const [baixaPwdDialogOpen, setBaixaPwdDialogOpen] = useState(false);
+  const [baixaSearch, setBaixaSearch] = useState('');
+  const [baixaSelected, setBaixaSelected] = useState(new Set()); // numeros dos pedidos
+  const [baixaInProgress, setBaixaInProgress] = useState(false);
+  const [baixaPassword, setBaixaPassword] = useState('');
+
   // Dialogs e senhas
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [loadPassword, setLoadPassword] = useState('');
@@ -110,20 +118,15 @@ function App() {
     }
   };
 
-  const syncBlingPedidos = async (syncPassword) => {
+  const syncBlingPedidos = async () => {
   try {
     setSyncInProgress(true);
 
-   const pwd = typeof passwordArg === 'string'
-      ? passwordArg
-      : String(passwordArg?.password ?? passwordArg ?? '');
 
     // (Opcional) garantir sessão + CSRF para rotas que exigem:   
     const okLogin = await login();
     if (!okLogin) { setSyncInProgress(false); return; }
     await fetchCsrfToken();
-
-    if (!requirePassword(syncPassword)) { setSyncInProgress(false); return; }
 
     // Validações simples de data
     if (!dataInicialSync || !dataFinalSync) {
@@ -134,7 +137,7 @@ function App() {
 
     // GET /pedidos/getVendas?dataInicial=YYYY-MM-DD&dataFinal=YYYY-MM-DD
     const { data } = await api.get('/pedidos/getVendas', {
-      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync, password: pwd },
+      params: { dataInicial: dataInicialSync, dataFinal: dataFinalSync},
       responseType: 'text',
     });
 
@@ -235,6 +238,7 @@ function App() {
           woodColor: item.corMadeira || '',
           coatingColor: item.corRevestimento || '',
           details: item.descricaoDetalhada || '',
+          detalhesMedidas: item.detalhesMedidas || '',
         })),
         sector: mapSectorFromId(pedido.setor?.id),
         priority: pedido.priority || 'normal',
@@ -380,7 +384,93 @@ function App() {
 
   // helper para nome do setor
   const sectorLabel = (key) => sectorMap[key]?.name || key;
+  
+  // Total de peças do pedido (soma quantidades)
+  const getTotalPecas = (task) =>
+    (task?.products || []).reduce((acc, p) => acc + Number(p?.quantity || 0), 0);
 
+  // Lista filtrada só para o modal de baixa (busca independente)
+  const baixaList = tasks.filter((t) => {
+    const query = baixaSearch.toLowerCase();
+    const haystack = [
+      t.orderNumber,
+      t.client,
+      t.description,
+      ...(t.products || []).map((p) => p?.name || '')
+    ].join(' ').toLowerCase();
+    return haystack.includes(query);
+  });
+
+  // Selecionar/Desselecionar um pedido pelo número
+  const toggleSelectOne = (orderNumber) => {
+    setBaixaSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderNumber)) next.delete(orderNumber);
+      else next.add(orderNumber);
+      return next;
+    });
+  };
+
+  // Selecionar/Desselecionar todos (com base na lista filtrada)
+  const toggleSelectAll = () => {
+    const allNumbers = baixaList.map((t) => t.orderNumber);
+    const allSelected = allNumbers.every((n) => baixaSelected.has(n));
+    setBaixaSelected(() => {
+      if (allSelected) return new Set();
+      return new Set(allNumbers);
+    });
+  };
+
+  const realizarBaixaPedidos = async () => {
+    try {
+      if (baixaSelected.size === 0) {
+        toast({ title: '⚠️ Nenhum pedido selecionado', description: 'Marque ao menos um pedido.' });
+        return;
+      }
+      if (!requirePassword(baixaPassword)) return;
+
+      setBaixaInProgress(true);
+
+      // garante sessão e CSRF (segue seu padrão)
+      const okLogin = await login();
+      if (!okLogin) { setBaixaInProgress(false); return; }
+      const okCsrf = await fetchCsrfToken();
+      if (!okCsrf) { setBaixaInProgress(false); return; }
+
+      // monta o DTO esperado pelo backend
+      const dto = {
+        password: baixaPassword,
+        numerosPedidos: Array.from(baixaSelected).map((n) => Number(n)),
+      };
+
+      // PUT no endpoint novo
+      const res = await api.put('/api/pedidos-venda/marcarComoEntregue', dto, { responseType: 'json' });
+
+      const msg = res?.data?.message || 'Baixa realizada com sucesso.';
+      toast({ title: '✅ Baixa realizada', description: msg });
+
+      // limpa estados e recarrega
+      setBaixaPassword('');
+      setBaixaSelected(new Set());
+      setBaixaPwdDialogOpen(false);
+      setBaixaDialogOpen(false);
+      await fetchPedidos();
+    } catch (err) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message || err?.message || 'Falha ao realizar baixa.';
+
+      if (status === 401) {
+        toast({ title: '🔒 Senha inválida', description: msg, variant: 'destructive' });
+      } else if (status === 404) {
+        toast({ title: '🔎 Nenhum pedido encontrado', description: msg, variant: 'destructive' });
+      } else {
+        toast({ title: '❌ Erro ao realizar baixa', description: msg, variant: 'destructive' });
+      }
+      console.error('Erro baixar pedidos:', err?.response?.data || err?.message);
+    } finally {
+      setBaixaInProgress(false);
+    }
+  };
   // ------------------------RELATÓRIOS ------------------------
   // ▶️ Estados locais para modal de Relatórios (adicionados aqui dentro do componente)
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
@@ -455,6 +545,7 @@ function App() {
     }
   };
 
+
   return (
     <>
       <Helmet>
@@ -483,17 +574,9 @@ function App() {
                     className="pl-10 w-64"
                   />
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    toast({
-                      title: '🚧 Filtros não implementados ainda',
-                      description: 'Logo sai',
-                    })
-                  }
-                >
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filtros
+
+                <Button variant="default" onClick={() => setBaixaDialogOpen(true)}>
+                  ✅ Entregar Pedidos
                 </Button>
                 {/* ▶️ NOVO: Botões do fluxo Bling */}
                 <Button variant="default" onClick={() => setBlingDialogOpen(true)}>
@@ -535,15 +618,6 @@ function App() {
                             onChange={(e) => setDataFinalSync(e.target.value)}
                           />
                         </div>
-                      </div>
-                      <div className="mt-2">
-                       <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                       <Input
-                         type="password"
-                         placeholder="Senha para sincronização"
-                         value={syncPassword}
-                         onChange={(e) => setSyncPassword(e.target.value)}
-                       />
                       </div>
                     </div>
 
@@ -768,6 +842,137 @@ function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={baixaDialogOpen} onOpenChange={(o) => { if (!baixaInProgress) setBaixaDialogOpen(o) }}>
+      <DialogContent className="sm:max-w-[900px]">
+        <DialogHeader>
+          <DialogTitle>Baixar Pedidos</DialogTitle>
+          <DialogDescription>Selecione os pedidos e clique em “Realizar Baixa”.</DialogDescription>
+        </DialogHeader>
+
+        {/* Busca */}
+        <div className="flex items-center gap-2 my-2">
+          <div className="relative grow">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar por número, cliente, item…"
+              value={baixaSearch}
+              onChange={(e) => setBaixaSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button variant="outline" onClick={toggleSelectAll}>
+            {baixaList.length > 0 && baixaList.every((t) => baixaSelected.has(t.orderNumber))
+              ? 'Desmarcar todos'
+              : 'Selecionar todos'}
+          </Button>
+        </div>
+
+                {/* Tabela */}
+                {/* Tabela com scroll interno e altura máxima */}
+        <div className="border rounded-md overflow-hidden mt-2">
+          <div className="max-h-[400px] overflow-y-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="text-left">
+                  <th className="p-3">Selecionar</th>
+                  <th className="p-3">Nº Pedido</th>
+                  <th className="p-3">Data</th>
+                  <th className="p-3">Cliente</th>
+                  <th className="p-3">Total Peças</th>
+                </tr>
+              </thead>
+              <tbody>
+                {baixaList.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-gray-500" colSpan={5}>
+                      Nenhum pedido encontrado.
+                    </td>
+                  </tr>
+                )}
+                {baixaList.map((t) => {
+                  const selected = baixaSelected.has(t.orderNumber);
+                  const dataExib = (t.dataEntrega || t.dataEmissao || '').slice(0, 10);
+                  return (
+                    <tr
+                      key={t.orderNumber}
+                      className="border-t hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleSelectOne(t.orderNumber)}
+                        />
+                      </td>
+                      <td className="p-3 font-medium whitespace-nowrap">
+                        {t.orderNumber}
+                      </td>
+                      <td className="p-3">{dataExib || '—'}</td>
+                      <td className="p-3 truncate max-w-[200px]">{t.client || '—'}</td>
+                      <td className="p-3">{getTotalPecas(t)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+
+        <DialogFooter className="mt-4 gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => setBaixaDialogOpen(false)} disabled={baixaInProgress}>
+            Fechar
+          </Button>
+          <Button
+            onClick={() => {
+              if (baixaSelected.size === 0) {
+                toast({ title: '⚠️ Selecione ao menos um pedido', description: 'Marque os pedidos na tabela.' });
+                return;
+              }
+              setBaixaPwdDialogOpen(true);
+            }}
+            disabled={baixaInProgress}
+          >
+            {baixaInProgress ? 'Processando…' : 'Realizar Baixa'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={baixaPwdDialogOpen} onOpenChange={(o) => setBaixaPwdDialogOpen(o)}>
+    <DialogContent className="sm:max-w-[420px]">
+      <DialogHeader>
+        <DialogTitle>Digite a senha</DialogTitle>
+        <DialogDescription>Necessária para confirmar a baixa dos pedidos selecionados.</DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <Input
+          type="password"
+          placeholder="Senha"
+          value={baixaPassword}
+          onChange={(e) => setBaixaPassword(e.target.value)}
+          disabled={baixaInProgress}
+        />
+      </div>
+
+      <DialogFooter className="mt-4 gap-2 sm:gap-0">
+        <Button variant="outline" onClick={() => setBaixaPwdDialogOpen(false)} disabled={baixaInProgress}>
+          Cancelar
+        </Button>
+        <Button
+          onClick={async () => {
+            if (!requirePassword(baixaPassword)) return;
+            await realizarBaixaPedidos();
+          }}
+          disabled={baixaInProgress}
+        >
+          {baixaInProgress ? 'Baixando…' : 'Confirmar Baixa'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
     </>
     
   );

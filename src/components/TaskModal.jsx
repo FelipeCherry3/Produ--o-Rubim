@@ -66,7 +66,8 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
         quantidade: p.quantity ?? null,
         corMadeira: p.woodColor ?? null,
         corRevestimento: p.coatingColor ?? null,
-        descricaoDetalhada: p.details ?? null
+        descricaoDetalhada: p.details ?? null,
+        detalhesMedidas: p.detalhesMedidas ?? null,
       }))
     };
 
@@ -246,6 +247,7 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
                             <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-600 mt-1">
                               <Badge variant="secondary">Madeira: {product.woodColor || 'N/A'}</Badge>
                               <Badge variant="secondary">Revest.: {product.coatingColor || 'N/A'}</Badge>
+                              <Badge variant="secondary">Medidas: {product.detalhesMedidas || 'N/A'}</Badge>
                             </div>
                             {product.details && (
                               <p className="text-xs text-gray-500 mt-1 break-words">
@@ -278,6 +280,11 @@ const TaskModal = ({ isOpen, onClose, task, onSave, isEditing = false }) => {
                               value={product.coatingColor ?? ''}
                               onChange={(e) => handleInlineChange(product.id, 'coatingColor', e.target.value)}
                               placeholder="Cor do Revestimento"
+                            />
+                            <Input
+                              value={product.detalhesMedidas ?? ''}
+                              onChange={(e) => handleInlineChange(product.id, 'detalhesMedidas', e.target.value)}
+                              placeholder="Detalhes das Medidas"
                             />
                             <Textarea
                               className="md:col-span-2"
