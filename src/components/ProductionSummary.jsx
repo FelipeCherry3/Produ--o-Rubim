@@ -64,7 +64,7 @@ const buildPrintableHtml = ({ tasks, sector, summary }) => {
     .map((s) => `<li><b>${s.quantity}</b> — ${s.label}</li>`)
     .join('');
 
-  // CSS simples e limpo para impressão
+  // CSS da impressão
   const styles = `
     <style>
       * { box-sizing: border-box; }

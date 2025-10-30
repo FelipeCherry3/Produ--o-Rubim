@@ -381,6 +381,80 @@ function App() {
   // helper para nome do setor
   const sectorLabel = (key) => sectorMap[key]?.name || key;
 
+  // ------------------------RELATÓRIOS ------------------------
+  // ▶️ Estados locais para modal de Relatórios (adicionados aqui dentro do componente)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportParamsOpen, setReportParamsOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [reportParams, setReportParams] = useState({
+    dataInicial: new Date().toISOString().split('T')[0],
+    dataFinal: new Date().toISOString().split('T')[0],
+    password: '',
+  });
+
+  const reports = [
+    { id: 'resumo-producao', title: 'Resumo de Produção' },
+    { id: 'pedidos-por-setor', title: 'Pedidos por Setor' },
+    { id: 'pedidos-entregues', title: 'Pedidos Entregues' },
+  ];
+
+  const openReportParams = (report) => {
+    setSelectedReport(report);
+    setReportParams((p) => ({
+      ...p,
+      dataInicial: new Date().toISOString().split('T')[0],
+      dataFinal: new Date().toISOString().split('T')[0],
+      password: '',
+    }));
+    setReportParamsOpen(true);
+  };
+
+  const generateReport = async () => {
+    if (!requirePassword(reportParams.password)) return;
+
+    setReportParamsOpen(false);
+    setReportDialogOpen(false);
+
+    toast({ title: 'Gerando relatório…', description: `${selectedReport?.title}` });
+
+    try {
+      // Exemplo de chamada ao backend; adapte a rota/params conforme sua API.
+      // Aqui usamos responseType: 'blob' caso retorne PDF/XLS para download.
+      const { data } = await api.get(`/api/reports/${selectedReport.id}`, {
+        params: {
+          dataInicial: reportParams.dataInicial,
+          dataFinal: reportParams.dataFinal,
+          password: reportParams.password,
+        },
+        responseType: 'blob',
+      });
+
+      // Se a API retornar um arquivo, gerar download no navegador
+      const blob = new Blob([data]);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // nome do arquivo baseado no relatório
+      a.download = `${selectedReport.id}-${reportParams.dataInicial}-${reportParams.dataFinal}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast({ title: '✅ Relatório gerado', description: 'O download foi iniciado.' });
+    } catch (err) {
+      console.error('Erro gerar relatório:', err?.response?.data || err?.message || err);
+      toast({
+        title: '❌ Falha ao gerar relatório',
+        description: err?.response?.data || err?.message || 'Verifique os parâmetros e tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSelectedReport(null);
+      setReportParams((p) => ({ ...p, password: '' }));
+    }
+  };
+
   return (
     <>
       <Helmet>
@@ -486,16 +560,12 @@ function App() {
 
                 <Button
                   variant="outline"
-                  onClick={() =>
-                    toast({
-                      title: '🚧 Relatórios não implementados ainda',
-                      description: 'Logo sai',
-                    })
-                  }
+                  onClick={() => setReportDialogOpen(true)}
                 >
                   <BarChart3 className="w-4 h-4 mr-2" />
                   Relatórios
                 </Button>
+
                 <Button variant="default" onClick={() => setLoadDialogOpen(true)}>
                    <Download className="w-4 h-4 mr-2" />
                    Carregar Pedidos
@@ -587,6 +657,81 @@ function App() {
             <Button onClick={confirmMoveAction} disabled={isMoving}>
               {isMoving ? 'Movendo…' : 'Confirmar'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ▶️ Modal: Lista de Relatórios */}
+      <Dialog open={reportDialogOpen} onOpenChange={(o) => setReportDialogOpen(o)}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Relatórios disponíveis</DialogTitle>
+            <DialogDescription>Selecione um relatório para inserir os parâmetros.</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-3">
+            {reports.map((r) => (
+              <div key={r.id} className="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
+                <div>
+                  <div className="font-medium">{r.title}</div>
+                  <div className="text-xs text-gray-500">Clique para definir parâmetros e gerar</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openReportParams(r)}>Parâmetros</Button>
+                  <Button size="sm" onClick={() => { setSelectedReport(r); setReportParamsOpen(true); }}>Gerar</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="mt-6 gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setReportDialogOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ▶️ Modal: Parâmetros do Relatório selecionado */}
+      <Dialog open={reportParamsOpen} onOpenChange={(o) => setReportParamsOpen(o)}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Parâmetros: {selectedReport?.title}</DialogTitle>
+            <DialogDescription>Preencha o período e a senha (se necessário).</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
+                <Input
+                  type="date"
+                  value={reportParams.dataInicial}
+                  onChange={(e) => setReportParams((p) => ({ ...p, dataInicial: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data final</label>
+                <Input
+                  type="date"
+                  value={reportParams.dataFinal}
+                  onChange={(e) => setReportParams((p) => ({ ...p, dataFinal: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+              <Input
+                type="password"
+                placeholder="Senha (se aplicável)"
+                value={reportParams.password}
+                onChange={(e) => setReportParams((p) => ({ ...p, password: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6 gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setReportParamsOpen(false); setSelectedReport(null); }}>Cancelar</Button>
+            <Button onClick={generateReport}>Gerar relatório</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
