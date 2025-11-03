@@ -595,7 +595,8 @@ const toBRDate = (val) => {
       const nomeCliente  = getFirst(it, ['nomeCliente', 'cliente', 'nome']);
       const dataPedido   = getFirst(it, ['dataPedido', 'data_pedido']);
       const dataEntrega  = getFirst(it, ['dataEntrega', 'data_entrega']);
-      const totalPecas   = getFirst(it, ['totalPecas', 'total']);
+      const totalPecas   = getFirst(it, ['totalPecas', 'quantidadePecas']);
+      const leadtimeDias = getFirst(it, ['leadTimeDias', 'lead_time_dias']);
 
       return [
         numero != null ? String(numero) : '—',
