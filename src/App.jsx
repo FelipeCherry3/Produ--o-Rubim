@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
 import api from './api/axios';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 
 // ▶️ NOVO: Dialog (shadcn/ui)
 import {
@@ -499,39 +502,115 @@ function App() {
     setReportParamsOpen(true);
   };
 
-  const generateReport = async () => {
-    if (!requirePassword(reportParams.password)) return;
+  const toBRDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+};
 
-    setReportParamsOpen(false);
-    setReportDialogOpen(false);
+const buildFileName = (id, ini, fim) => {
+  const norm = (s) => (s || '').replaceAll('-', '');
+  return `${id}-${norm(ini)}-${norm(fim)}.pdf`;
+};
 
-    toast({ title: 'Gerando relatório…', description: `${selectedReport?.title}` });
+const generateReport = async () => {
+  if (!requirePassword(reportParams.password)) return;
 
-    try {
-      // Exemplo de chamada ao backend; adapte a rota/params conforme sua API.
-      // Aqui usamos responseType: 'blob' caso retorne PDF/XLS para download.
-      const { data } = await api.get(`/api/relatorios/${selectedReport.id}`, {
-        params: {
-          dataInicial: reportParams.dataInicial,
-          dataFinal: reportParams.dataFinal,
-          password: reportParams.password,
-        },
-        responseType: 'blob',
-      });
+  setReportParamsOpen(false);
+  setReportDialogOpen(false);
 
-      // Se a API retornar um arquivo, gerar download no navegador
-      const blob = new Blob([data]);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      // nome do arquivo baseado no relatório
-      a.download = `${selectedReport.id}-${reportParams.dataInicial}-${reportParams.dataFinal}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+  const reportId = selectedReport?.id || 'pedidos-entregues';
+  toast({ title: 'Gerando relatório…', description: selectedReport?.title || 'Pedidos entregues' });
 
-      toast({ title: '✅ Relatório gerado', description: 'O download foi iniciado.' });
+  try {
+    // Agora esperamos JSON
+    const { data } = await api.get('/relatorios/pedidos-entregues', {
+      params: {
+        dataInicial: reportParams.dataInicial,
+        dataFinal: reportParams.dataFinal,
+        password: reportParams.password,
+      },
+    });
+
+    if (!data || !Array.isArray(data.itens)) throw new Error('Resposta inesperada do servidor.');
+
+    const {
+      periodoInicial,
+      periodoFinal,
+      itens,
+      resumo: { totalPedidosEntregues, totalPecasEntregues, tempoMedioProducaoDias },
+    } = data;
+
+    // Criar PDF
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Cabeçalho
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Relatório – Pedidos Entregues', 40, 50);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(`Período: ${toBRDate(periodoInicial)} até ${toBRDate(periodoFinal)}`, 40, 70);
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${toBRDate(new Date().toISOString())}`, 40, 85);
+
+    // Tabela
+    const head = [['Número do Pedido', 'Cliente', 'Data do Pedido', 'Data da Entrega', 'Peças']];
+    const body = itens.map((it) => [
+      it.numeroPedido || '—',
+      it.nomeCliente || '—',
+      toBRDate(it.dataPedido),
+      toBRDate(it.dataEntrega),
+      String(it.totalPecas || 0),
+    ]);
+
+    autoTable(doc, {
+      head,
+      body,
+      startY: 110,
+      styles: { font: 'helvetica', fontSize: 9, cellPadding: 6, valign: 'middle' },
+      headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 100 },
+        1: { cellWidth: 180 },
+        2: { cellWidth: 100 },
+        3: { cellWidth: 100 },
+        4: { cellWidth: 60, halign: 'right' },
+      },
+      didDrawPage: (dataHook) => {
+        const str = `Página ${doc.internal.getNumberOfPages()}`;
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
+      },
+    });
+
+    // Resumo
+    const afterTableY = doc.lastAutoTable?.finalY || 120;
+    const resumoY = afterTableY + 25;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Resumo', 40, resumoY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    let y = resumoY + 20;
+
+    doc.text(`Total de pedidos entregues: ${totalPedidosEntregues || 0}`, 40, y);
+    y += 18;
+    doc.text(`Total de peças entregues: ${totalPecasEntregues || 0}`, 40, y);
+    y += 18;
+    doc.text(`Tempo médio de produção (dias): ${tempoMedioProducaoDias || 0}`, 40, y);
+
+    // Salvar PDF
+    const fileName = buildFileName(reportId, periodoInicial, periodoFinal);
+    doc.save(fileName);
+
+    toast({ title: '✅ Relatório gerado', description: `Download: ${fileName}` });
     } catch (err) {
       console.error('Erro gerar relatório:', err?.response?.data || err?.message || err);
       toast({
@@ -544,7 +623,6 @@ function App() {
       setReportParams((p) => ({ ...p, password: '' }));
     }
   };
-
 
   return (
     <>
