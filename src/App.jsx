@@ -525,7 +525,7 @@ const generateReport = async () => {
 
   try {
     // Agora esperamos JSON
-    const { data } = await api.get('/relatorios/pedidos-entregues', {
+    const { data } = await api.get('/api/relatorios/pedidos-entregues', {
       params: {
         dataInicial: reportParams.dataInicial,
         dataFinal: reportParams.dataFinal,
