@@ -550,7 +550,7 @@ const toBRDate = (val) => {
 
   try {
     // Espera JSON do backend (o seu Controller atual)
-    const { data } = await api.get('/relatorios/pedidos-entregues', {
+    const { data } = await api.get('/api/relatorios/pedidos-entregues', {
       params: {
         dataInicial: reportParams.dataInicial, // YYYY-MM-DD
         dataFinal: reportParams.dataFinal,     // YYYY-MM-DD
