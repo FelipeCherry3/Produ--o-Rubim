@@ -502,49 +502,79 @@ function App() {
     setReportParamsOpen(true);
   };
 
-  const toBRDate = (iso) => {
-  if (!iso) return '—';
-  const d = new Date(iso);
+ const getFirst = (obj, keys) => {
+  for (const k of keys) {
+    if (obj && obj[k] != null) return obj[k];
+  }
+  return null;
+};
+
+// Converte ISO string, epoch number, array [yyyy,MM,dd,HH,mm,ss] ou já Date
+const toBRDate = (val) => {
+  if (val == null) return '—';
+
+  let d;
+
+  if (val instanceof Date) {
+    d = val;
+  } else if (Array.isArray(val)) {
+    // Jackson pode serializar como array
+    const [y, m = 1, day = 1, hh = 0, mm = 0, ss = 0, ms = 0] = val;
+    d = new Date(Date.UTC(y, (m - 1), day, hh, mm, ss, ms));
+  } else if (typeof val === 'number') {
+    // epoch millis/seconds
+    d = new Date(val > 1e12 ? val : val * 1000);
+  } else if (typeof val === 'string') {
+    d = new Date(val);
+  } else {
+    return '—';
+  }
+
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-};
+  };
 
-const buildFileName = (id, ini, fim) => {
-  const norm = (s) => (s || '').replaceAll('-', '');
-  return `${id}-${norm(ini)}-${norm(fim)}.pdf`;
-};
+  const buildFileName = (id, ini, fim) => {
+    const norm = (s) => (s || '').toString().replaceAll('-', '');
+    return `${id}-${norm(ini)}-${norm(fim)}.pdf`;
+  };
 
-const generateReport = async () => {
+ const generateReport = async () => {
   if (!requirePassword(reportParams.password)) return;
 
   setReportParamsOpen(false);
   setReportDialogOpen(false);
 
-  const reportId = selectedReport?.id || 'pedidos-entregues';
-  toast({ title: 'Gerando relatório…', description: selectedReport?.title || 'Pedidos entregues' });
+  const reportId = (selectedReport && selectedReport.id) || 'pedidos-entregues';
+  toast({ title: 'Gerando relatório…', description: (selectedReport && selectedReport.title) || 'Pedidos entregues' });
 
   try {
-    // Agora esperamos JSON
-    const { data } = await api.get('/api/relatorios/pedidos-entregues', {
+    // Espera JSON do backend (o seu Controller atual)
+    const { data } = await api.get('/relatorios/pedidos-entregues', {
       params: {
-        dataInicial: reportParams.dataInicial,
-        dataFinal: reportParams.dataFinal,
+        dataInicial: reportParams.dataInicial, // YYYY-MM-DD
+        dataFinal: reportParams.dataFinal,     // YYYY-MM-DD
         password: reportParams.password,
       },
     });
 
-    if (!data || !Array.isArray(data.itens)) throw new Error('Resposta inesperada do servidor.');
+    if (!data || !Array.isArray(data.itens) || !data.resumo) {
+      throw new Error('Resposta inesperada do servidor.');
+    }
 
-    const {
-      periodoInicial,
-      periodoFinal,
-      itens,
-      resumo: { totalPedidosEntregues, totalPecasEntregues, tempoMedioProducaoDias },
-    } = data;
+    const periodoInicial = getFirst(data, ['periodoInicial', 'dataInicial']);
+    const periodoFinal   = getFirst(data, ['periodoFinal', 'dataFinal']);
+    const itens          = data.itens || [];
+    const resumo         = data.resumo || {};
 
-    // Criar PDF
+    const totalPedidosEntregues  = getFirst(resumo, ['totalPedidosEntregues', 'totalPedidos']);
+    const totalPecasEntregues    = getFirst(resumo, ['totalPecasEntregues', 'total']);
+    const tempoMedioProducaoDias = getFirst(resumo, ['tempoMedioProducaoDias', 'mediaDias']);
+
+    // ---- PDF ----
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
     // Cabeçalho
     doc.setFont('helvetica', 'bold');
@@ -555,62 +585,69 @@ const generateReport = async () => {
     doc.setFontSize(11);
     doc.text(`Período: ${toBRDate(periodoInicial)} até ${toBRDate(periodoFinal)}`, 40, 70);
     doc.setFontSize(10);
-    doc.text(`Gerado em: ${toBRDate(new Date().toISOString())}`, 40, 85);
+    doc.text(`Gerado em: ${toBRDate(new Date())}`, 40, 85);
 
     // Tabela
     const head = [['Número do Pedido', 'Cliente', 'Data do Pedido', 'Data da Entrega', 'Peças']];
-    const body = itens.map((it) => [
-      it.numeroPedido || '—',
-      it.nomeCliente || '—',
-      toBRDate(it.dataPedido),
-      toBRDate(it.dataEntrega),
-      String(it.totalPecas || 0),
-    ]);
 
-    autoTable(doc, {
-      head,
-      body,
-      startY: 110,
-      styles: { font: 'helvetica', fontSize: 9, cellPadding: 6, valign: 'middle' },
-      headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
-      columnStyles: {
-        0: { cellWidth: 100 },
-        1: { cellWidth: 180 },
-        2: { cellWidth: 100 },
-        3: { cellWidth: 100 },
-        4: { cellWidth: 60, halign: 'right' },
-      },
-      didDrawPage: (dataHook) => {
-        const str = `Página ${doc.internal.getNumberOfPages()}`;
-        doc.setFontSize(9);
-        doc.setTextColor(100);
-        doc.text(str, pageWidth - 40, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
-      },
-    });
+    const body = itens.map((it) => {
+      const numero       = getFirst(it, ['numeroPedido', 'numero']);       // Long/Str
+      const nomeCliente  = getFirst(it, ['nomeCliente', 'cliente', 'nome']);
+      const dataPedido   = getFirst(it, ['dataPedido', 'data_pedido']);
+      const dataEntrega  = getFirst(it, ['dataEntrega', 'data_entrega']);
+      const totalPecas   = getFirst(it, ['totalPecas', 'total']);
 
-    // Resumo
-    const afterTableY = doc.lastAutoTable?.finalY || 120;
-    const resumoY = afterTableY + 25;
+      return [
+        numero != null ? String(numero) : '—',
+        nomeCliente != null ? String(nomeCliente) : '—',
+        toBRDate(dataPedido),
+        toBRDate(dataEntrega),
+        totalPecas != null ? String(totalPecas) : '0',
+      ];
+      });
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Resumo', 40, resumoY);
+      autoTable(doc, {
+        head,
+        body,
+        startY: 110,
+        styles: { font: 'helvetica', fontSize: 9, cellPadding: 6, valign: 'middle' },
+        headStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 110 },
+          1: { cellWidth: 190 },
+          2: { cellWidth: 110 },
+          3: { cellWidth: 110 },
+          4: { cellWidth: 60, halign: 'right' },
+        },
+        didDrawPage: () => {
+          const str = `Página ${doc.getNumberOfPages()}`;
+          doc.setFontSize(9);
+          doc.setTextColor(100);
+          doc.text(str, pageWidth - 40, pageHeight - 20, { align: 'right' });
+        },
+      });
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    let y = resumoY + 20;
+      // Resumo
+      const afterTableY = doc.lastAutoTable?.finalY || 120;
+      const resumoY = afterTableY + 25;
 
-    doc.text(`Total de pedidos entregues: ${totalPedidosEntregues || 0}`, 40, y);
-    y += 18;
-    doc.text(`Total de peças entregues: ${totalPecasEntregues || 0}`, 40, y);
-    y += 18;
-    doc.text(`Tempo médio de produção (dias): ${tempoMedioProducaoDias || 0}`, 40, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('Resumo', 40, resumoY);
 
-    // Salvar PDF
-    const fileName = buildFileName(reportId, periodoInicial, periodoFinal);
-    doc.save(fileName);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      let y = resumoY + 20;
 
-    toast({ title: '✅ Relatório gerado', description: `Download: ${fileName}` });
+      doc.text(`Total de pedidos entregues: ${totalPedidosEntregues ?? 0}`, 40, y); y += 18;
+      doc.text(`Total de peças entregues: ${totalPecasEntregues ?? 0}`, 40, y);   y += 18;
+      doc.text(`Tempo médio de produção (dias): ${tempoMedioProducaoDias ?? 0}`, 40, y);
+
+      // Salvar
+      const fileName = buildFileName(reportId, periodoInicial, periodoFinal);
+      doc.save(fileName);
+
+      toast({ title: '✅ Relatório gerado', description: `Download: ${fileName}` });
     } catch (err) {
       console.error('Erro gerar relatório:', err?.response?.data || err?.message || err);
       toast({
