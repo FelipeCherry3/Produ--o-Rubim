@@ -510,7 +510,7 @@ function App() {
     try {
       // Exemplo de chamada ao backend; adapte a rota/params conforme sua API.
       // Aqui usamos responseType: 'blob' caso retorne PDF/XLS para download.
-      const { data } = await api.get(`/api/reports/${selectedReport.id}`, {
+      const { data } = await api.get(`/api/relatorios/${selectedReport.id}`, {
         params: {
           dataInicial: reportParams.dataInicial,
           dataFinal: reportParams.dataFinal,
