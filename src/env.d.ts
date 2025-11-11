@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   // se quiser adicionar outras, todas devem começar com VITE_
   readonly VITE_LOGIN_SPRING?: string;
   readonly VITE_SOME_PUBLIC_KEY?: string;
+  readonly VITE_LOGIN_DEMO_USER?: string;
+  readonly VITE_LOGIN_DEMO_PASS?: string;
 }
 
 interface ImportMeta {
