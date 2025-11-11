@@ -3,10 +3,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from '../api/axios';
 
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";  
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";  
 import { useToast } from '@/components/ui/use-toast';
-import { Toaster } from "@/components/ui/Toaster";
+import { Toaster } from "@/components/ui/toaster";
 import { motion } from "framer-motion";
 
 import { LogIn, Eye, EyeOff, ShieldCheck } from "lucide-react";
