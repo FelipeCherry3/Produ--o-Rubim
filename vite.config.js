@@ -203,7 +203,7 @@ export default defineConfig({
 		},
 		allowedHosts: true,
 		proxy: {
-			'/login': { target: 'http://localhost:8080', changeOrigin: true },
+			
 			'/api':   { target: 'http://localhost:8080', changeOrigin: true },
 			'/logout':{ target: 'http://localhost:8080', changeOrigin: true },
 		}
