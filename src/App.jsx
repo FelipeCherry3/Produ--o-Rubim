@@ -1030,4 +1030,4 @@ const toBRDate = (val) => {
   );
 }
 
-export default Kanban;
+export default App;
