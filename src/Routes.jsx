@@ -9,7 +9,7 @@ import App from "./App.jsx";
 const router = createBrowserRouter([
   { path: "/", element: <Login /> },
   { path: "/login", element: <Login /> },
-  { path: "/kanban", element: <ProtectedRoute><App /></ProtectedRoute> },
+  { path: "/kanban", element: <ProtectedRoute><Kanban /></ProtectedRoute> },
 ]);
 
 export default function AppRoutes() {
