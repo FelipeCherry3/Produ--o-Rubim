@@ -1,5 +1,5 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import KanbanPage from "./pages/Kanban.jsx";
+import KanbanPage from "./pages/KanbanPage.jsx";
 import Login from "./pages/Login.jsx";
 
 

@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 
-function App() {
+function KanbanPage() {
   const [tasks, setTasks] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
