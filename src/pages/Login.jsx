@@ -20,7 +20,7 @@ export default function Login() {
   const defaultUser = import.meta.env.VITE_LOGIN_DEMO_USER || "";
   const defaultPass = import.meta.env.VITE_LOGIN_DEMO_PASS || "";
 
-  const [username, setUsername] = React.useState(defaultUser);
+  const [login, setLogin] = React.useState(defaultUser);
   const [password, setPassword] = React.useState(defaultPass);
   const [showPass, setShowPass] = useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -36,8 +36,8 @@ export default function Login() {
   }, [location, navigate]);
 
   const isDisabled = useMemo(
-    () => !username.trim() || !password.trim() || isLoading,
-    [username, password, isLoading]
+    () => !login.trim() || !password.trim() || isLoading,
+    [login, password, isLoading]
   );
 
   async function handleSubmit(e) {
@@ -47,19 +47,19 @@ export default function Login() {
 
     try {
       const { data } = await api.post("/auth/login", {
-        username: username.trim(),
+        login: login.trim(),
         password: password,
       });
 
-      const accessToken = data?.accessToken;
+      const accessToken = data?.token;
       const refreshToken = data?.refreshToken;
 
-      if (!accessToken) {
+      if (!token) {
         throw new Error("No access token received");
       }
 
       // 👉 usa helper para salvar tokens
-      setTokens({ accessToken, refreshToken });
+      setTokens({ token: accessToken, refreshToken });
 
       // NÃO precisa mexer em api.defaults.headers.common:
       // o interceptor no axios já injeta o Authorization a partir do token.
@@ -126,8 +126,8 @@ export default function Login() {
               <Input
                 type="text"
                 placeholder="seu.usuario"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
                 autoComplete="username"
               />
             </div>
