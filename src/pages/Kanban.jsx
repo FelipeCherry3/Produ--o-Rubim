@@ -30,8 +30,7 @@ function App() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [draggedTask, setDraggedTask] = useState(null);
-  const [csrfToken, setCsrfToken] = useState(null);
+  const [draggedTask, setDraggedTask] = useState(null);;
   const { toast } = useToast();
 
   // ▶️ NOVO: estado para confirmação de movimento
@@ -83,11 +82,6 @@ function App() {
   try {
     setAuthInProgress(true);
 
-    // (Opcional mas recomendado) garantir sessão + CSRF antes, caso seu /authorize exija auth
-    const okLogin = await login();
-    if (!okLogin) { setAuthInProgress(false); return; }
-    await fetchCsrfToken();
-
     // Chama seu backend /authorize
     const res = await api.get('/authorize', { responseType: 'text' });
     let text = typeof res.data === 'string' ? res.data : String(res.data || '');
@@ -125,12 +119,6 @@ function App() {
   try {
     setSyncInProgress(true);
 
-
-    // (Opcional) garantir sessão + CSRF para rotas que exigem:   
-    const okLogin = await login();
-    if (!okLogin) { setSyncInProgress(false); return; }
-    await fetchCsrfToken();
-
     // Validações simples de data
     if (!dataInicialSync || !dataFinalSync) {
       toast({ title: '⚠️ Período inválido', description: 'Selecione data inicial e final.' });
@@ -165,48 +153,6 @@ function App() {
   };
 
 
-  // === LOGIN ===
-  const login = async () => {
-    try {
-      const form = new URLSearchParams();
-      form.set('username', import.meta.env.VITE_BACK_USER || 'admin');
-      form.set('password', import.meta.env.VITE_SPRING_PASSWORD || 'senha123');
-
-      const res = await api.post('/login', form.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-      console.log('Login OK:', res.status);
-      return true;
-    } catch (error) {
-      toast({
-        title: '❌ Erro ao fazer login',
-        description: error?.message || 'Não foi possível autenticar no servidor.',
-        variant: 'destructive',
-      });
-      console.error('Erro login:', error?.response?.data || error?.message);
-      return false;
-    }
-  };
-
-  // === CSRF ===
-  const fetchCsrfToken = async () => {
-    try {
-      const { data } = await api.get('/api/csrf');
-      const headerName = data?.headerName || 'X-XSRF-TOKEN';
-      api.defaults.headers.common[headerName] = data?.token;
-      setCsrfToken(data?.token);
-      console.log('CSRF OK:', headerName, data?.token);
-      return true;
-    } catch (error) {
-      toast({
-        title: '❌ Erro ao obter CSRF',
-        description: error?.message || 'Não foi possível obter o token CSRF.',
-        variant: 'destructive',
-      });
-      console.error('Erro CSRF:', error?.response?.data || error?.message);
-      return false;
-    }
-  };
 
   // === BUSCAR PEDIDOS ===
   const fetchPedidos = async (passwordFront) => {
@@ -265,10 +211,6 @@ function App() {
   };
 
   const handleLoadPedidos = async (passwordFront) => {
-    const okLogin = await login();
-    if (!okLogin) return;
-    const okCsrf = await fetchCsrfToken();
-    if (!okCsrf) return;
     await fetchPedidos(passwordFront);
   };
 
@@ -433,12 +375,6 @@ function App() {
       if (!requirePassword(baixaPassword)) return;
 
       setBaixaInProgress(true);
-
-      // garante sessão e CSRF (segue seu padrão)
-      const okLogin = await login();
-      if (!okLogin) { setBaixaInProgress(false); return; }
-      const okCsrf = await fetchCsrfToken();
-      if (!okCsrf) { setBaixaInProgress(false); return; }
 
       // monta o DTO esperado pelo backend
       const dto = {

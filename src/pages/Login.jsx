@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-
 import { useNavigate, useLocation } from "react-router-dom";
-import api from '../api/axios';
+import api from "../api/axios";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";  
-import { useToast } from '@/components/ui/use-toast';
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { motion } from "framer-motion";
-
 import { LogIn, Eye, EyeOff, ShieldCheck } from "lucide-react";
+
+// 👉 importa helpers de token
+import { getAccessToken, setTokens } from "../api/token";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,17 +19,18 @@ export default function Login() {
 
   const defaultUser = import.meta.env.VITE_LOGIN_DEMO_USER || "";
   const defaultPass = import.meta.env.VITE_LOGIN_DEMO_PASS || "";
-  
+
   const [username, setUsername] = React.useState(defaultUser);
   const [password, setPassword] = React.useState(defaultPass);
   const [showPass, setShowPass] = useState(false);
-  const [ isLoading, setIsLoading ] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
 
+  // Se já tiver token, pula tela de login
   useEffect(() => {
-    const t = localStorage.getItem("token");
+    const t = getAccessToken();
     if (t) {
       const params = new URLSearchParams(location.search);
-      const from = params.get("from") || "/";
+      const from = params.get("from") || "/kanban";
       navigate(from, { replace: true });
     }
   }, [location, navigate]);
@@ -42,41 +44,51 @@ export default function Login() {
     e.preventDefault();
     if (isDisabled) return;
     setIsLoading(true);
-    try {
 
+    try {
       const { data } = await api.post("/auth/login", {
         username: username.trim(),
         password: password,
       });
+
       const accessToken = data?.accessToken;
-      const refresh = data?.refreshToken;
+      const refreshToken = data?.refreshToken;
+
       if (!accessToken) {
         throw new Error("No access token received");
       }
 
-      localStorage.setItem("token", accessToken);
-      if (refresh) localStorage.setItem("refresh", refresh);
-      api.defaults.headers.commom.Authorization = `Bearer ${accessToken}`;
+      // 👉 usa helper para salvar tokens
+      setTokens({ accessToken, refreshToken });
+
+      // NÃO precisa mexer em api.defaults.headers.common:
+      // o interceptor no axios já injeta o Authorization a partir do token.
+
       toast({
         title: "Login realizado",
-        description: "Você fez login, Seja Bem-Vindo.",
+        description: "Você fez login, seja bem-vindo.",
         duration: 3000,
-        icon: <SHieldCheck className="h-5 w-5 text-green-500" />,
+        icon: <ShieldCheck className="h-5 w-5 text-green-500" />,
       });
 
       const params = new URLSearchParams(location.search);
       const from = params.get("from") || "/kanban";
       navigate(from, { replace: true });
-    }
-    catch (error) {
-      error?.response?.data?.message || error.message || "Erro ao fazer login";
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Erro ao fazer login";
+
+      console.error("Erro no login:", errorMessage);
+
       toast({
         title: "Erro ao fazer login",
         description: errorMessage,
         duration: 5000,
+        variant: "destructive",
       });
-    }
-    finally {
+    } finally {
       setIsLoading(false);
     }
   }
@@ -125,7 +137,6 @@ export default function Login() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Senha
                 </label>
-                {/* espaço para “Esqueci a senha” no futuro */}
               </div>
               <div className="relative">
                 <Input
@@ -144,23 +155,30 @@ export default function Login() {
                   onClick={() => setShowPass((s) => !s)}
                   aria-label={showPass ? "Ocultar senha" : "Mostrar senha"}
                 >
-                  {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPass ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
 
-            <Button
-              className="w-full"
-              type="submit"
-              disabled={isDisabled}
-            >
-              {isLoading ? "Entrando…" : (<span className="inline-flex items-center"><LogIn className="w-4 h-4 mr-2" /> Entrar</span>)}
+            <Button className="w-full" type="submit" disabled={isDisabled}>
+              {isLoading ? (
+                "Entrando…"
+              ) : (
+                <span className="inline-flex items-center">
+                  <LogIn className="w-4 h-4 mr-2" /> Entrar
+                </span>
+              )}
             </Button>
 
-            {/* Rodapé / dicas */}
             <p className="text-[11px] text-gray-500 text-center">
-              Dica: em desenvolvimento, defina <code>VITE_LOGIN_DEMO_USER</code> e{" "}
-              <code>VITE_LOGIN_DEMO_PASS</code> no seu <code>.env</code> para preencher automaticamente.
+              Dica: em desenvolvimento, defina{" "}
+              <code>VITE_LOGIN_DEMO_USER</code> e{" "}
+              <code>VITE_LOGIN_DEMO_PASS</code> no seu <code>.env</code> para
+              preencher automaticamente.
             </p>
           </form>
         </div>
