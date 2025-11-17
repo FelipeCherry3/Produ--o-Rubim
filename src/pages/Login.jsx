@@ -9,7 +9,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { motion } from "framer-motion";
 import { LogIn, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
-// 👉 importa helpers de token
 import { getAccessToken, setTokens } from "../auth/token";
 
 export default function Login() {
@@ -46,23 +45,27 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      // seu backend recebe { login, password } e retorna { token, ... }
       const { data } = await api.post("/auth/login", {
         login: login.trim(),
         password: password,
       });
 
+      // backend devolve "token" (access token)
       const accessToken = data?.token;
+      // se no futuro tiver refreshToken, pega aqui (se não tiver, fica undefined e tá tudo bem)
       const refreshToken = data?.refreshToken;
 
-      if (!token) {
+      // 👉 aqui estava o erro: você checava `token`, mas a variável é `accessToken`
+      if (!accessToken) {
         throw new Error("No access token received");
       }
 
-      // 👉 usa helper para salvar tokens
-      setTokens({ token: accessToken, refreshToken });
+      // 👉 usa helper para salvar tokens com as CHAVES certas
+      setTokens({ accessToken, refreshToken });
 
       // NÃO precisa mexer em api.defaults.headers.common:
-      // o interceptor no axios já injeta o Authorization a partir do token.
+      // o interceptor no axios já injeta o Authorization a partir do accessToken.
 
       toast({
         title: "Login realizado",
