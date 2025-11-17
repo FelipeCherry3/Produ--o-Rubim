@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
-import api from '../api/axios';
+import api from './api/axios';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -1030,4 +1030,4 @@ const toBRDate = (val) => {
   );
 }
 
-export default App;
+export default Kanban;
