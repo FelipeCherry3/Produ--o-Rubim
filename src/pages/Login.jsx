@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { LogIn, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 // 👉 importa helpers de token
-import { getAccessToken, setTokens } from "../api/token";
+import { getAccessToken, setTokens } from "../auth/token";
 
 export default function Login() {
   const navigate = useNavigate();
