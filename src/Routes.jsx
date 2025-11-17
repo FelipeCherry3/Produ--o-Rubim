@@ -1,5 +1,5 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import Kanban from "./pages/Kanban.jsx";
+import KanbanPage from "./pages/Kanban.jsx";
 import Login from "./pages/Login.jsx";
 
 
@@ -9,7 +9,7 @@ import App from "./App.jsx";
 const router = createBrowserRouter([
   { path: "/", element: <Login /> },
   { path: "/login", element: <Login /> },
-  { path: "/kanban", element: <ProtectedRoute><Kanban /></ProtectedRoute> },
+  { path: "/kanban", element: <ProtectedRoute><KanbanPage /></ProtectedRoute> },
 ]);
 
 export default function AppRoutes() {
